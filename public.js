@@ -330,10 +330,6 @@ function applyLeagueDataFromSheet(data) {
     localStorage.setItem('hggl2026_commissioner_note', String(data.commissionerNote));
   }
 
-  LEAGUE_DATA_SOURCE = 'Google Sheets JSONP';
-  LEAGUE_DATA_LAST_LOADED = new Date().toLocaleString('en-US', {
-    timeZone: 'America/New_York'
-  });
 }
 
 /**
