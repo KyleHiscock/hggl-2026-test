@@ -301,7 +301,7 @@ function leagueJsonpRequest(action, payload = {}) {
     const timer = setTimeout(() => {
       cleanup();
       reject(new Error('Google Sheets request timed out.'));
-    }, 15000);
+    }, 25000);
 
     function cleanup() {
       clearTimeout(timer);
