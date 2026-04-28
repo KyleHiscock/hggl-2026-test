@@ -70,7 +70,8 @@ const SCHEDULE_WEEKS = [
 let RESULTS = [];
 const STORAGE_KEY = 'hggl_2026_state_v2';
 let currentUser = null;
-let scorecardScores = {};  // "pid_hole" -> gross score string
+let scorecardScores = {};
+let scorecardFocusKey = null;  // "pid_hole" -> gross score string
 
 // ── HANDICAP ──
 // USGA Course Handicap formula:
@@ -627,9 +628,8 @@ function renderScorecard() {
         netCount++;
       }
       tds += `<td>
-        <input class="score-inp${hasStroke?' stroke':''}" type="number" min="1" max="15"
-          data-key="${key}" value="${scorecardScores[key]||''}"
-          oninput="onScoreInput(this)">
+        <input class="score-inp${hasStroke?' stroke':''}" type="number" inputmode="numeric" min="1" max="15"
+          data-key="${key}" value="${scorecardScores[key]||''}">
         ${hasStroke?'<span class="star">★</span>':''}
       </td>`;
     });
@@ -682,10 +682,38 @@ function renderScorecard() {
     document.getElementById('winner-display').textContent = state.holesWithScores > 0 ? 'Match in progress' : 'Enter scores to begin';
   }
 
-  // Re-attach listeners to new inputs
+  // Re-attach listeners to new inputs. Focus is restored after each render so Tab continues to the next hole.
   document.querySelectorAll('.score-inp').forEach(inp => {
     inp.addEventListener('input', function() { onScoreInput(this); });
+    inp.addEventListener('keydown', function(e) {
+      if(e.key === 'Enter') {
+        e.preventDefault();
+        focusNextScoreInput(this);
+      }
+    });
   });
+
+  if(scorecardFocusKey) {
+    const activeInput = document.querySelector(`.score-inp[data-key="${scorecardFocusKey}"]`);
+    if(activeInput) {
+      activeInput.focus({ preventScroll: true });
+      try {
+        const len = activeInput.value.length;
+        activeInput.setSelectionRange(len, len);
+      } catch(e) {}
+    }
+    scorecardFocusKey = null;
+  }
+}
+
+function focusNextScoreInput(currentInput) {
+  const inputs = Array.from(document.querySelectorAll('.score-inp'));
+  const currentIndex = inputs.indexOf(currentInput);
+  const nextInput = inputs[currentIndex + 1];
+  if(nextInput) {
+    nextInput.focus({ preventScroll: true });
+    nextInput.select();
+  }
 }
 
 function onScoreInput(el) {
@@ -693,6 +721,7 @@ function onScoreInput(el) {
   const val = el.value.trim();
   if(val && parseInt(val) > 0) scorecardScores[key] = val;
   else delete scorecardScores[key];
+  scorecardFocusKey = key;
   renderScorecard();
 }
 
