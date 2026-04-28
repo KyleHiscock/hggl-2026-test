@@ -6,8 +6,9 @@
 <title>Hockey Guys Golf League Admin</title>
 <meta name="robots" content="noindex,nofollow">
 <link href="https://fonts.googleapis.com/css2?family=Bebas+Neue&family=Barlow+Condensed:wght@400;600;700;900&family=Barlow:wght@400;500;600;700;800&family=Inter+Tight:wght@500;600;700;800&display=swap" rel="stylesheet">
-<link rel="stylesheet" href="style.css?v=4.0">
-<link rel="stylesheet" href="theme-polished.css?v=4.0">
+<link rel="stylesheet" href="style.css?v=4.1">
+<link rel="stylesheet" href="theme-polished.css?v=4.1">
+
 </head>
 <body>
 
@@ -28,7 +29,7 @@
   </div>
 </div>
 <div class="nav">
-  <a class="nav-btn nav-link-btn" href="index.html">← Public Site</a>
+  <a class="nav-btn nav-link-btn" href="index.html?v=4.1">← Public Site</a>
   <button class="nav-btn active" onclick="show('dashboard',this)">Home</button>
   <button class="nav-btn" onclick="show('standings',this)">Standings</button>
   <button class="nav-btn" onclick="show('schedule',this)">Schedule</button>
@@ -74,34 +75,44 @@
   <div id="stats" class="section">
     <div class="section-header"><span class="section-label">Player Stats</span><div class="section-header-line"></div></div>
 
+    <!-- Stats Filter -->
     <div class="stats-filter">
       <button class="stats-filter-btn active" onclick="setStatFilter('all',this)">All Players</button>
       <button class="stats-filter-btn" onclick="setStatFilter('leaders',this)">Leaders</button>
     </div>
 
+    <!-- Season Leaders Banner -->
     <div id="stats-leaders-banner" style="display:none"></div>
 
+    <!-- Player Stats Cards -->
     <div id="stats-no-data" class="no-results">
       <div class="no-results-icon">📊</div>
       <div class="no-results-text">No stats yet<br>Enter Week 1 scores to see individual stats</div>
     </div>
     <div id="stats-container" style="display:none">
+
+      <!-- Season Leaders row -->
       <div id="leaders-row" class="leaders-row"></div>
 
+      <!-- Filter toggle -->
       <div id="player-search-wrap" style="margin-bottom:14px;display:none">
         <input type="text" id="player-search" class="player-search-input" placeholder="Search player..." oninput="filterPlayerStats()">
       </div>
 
+      <!-- All Players Grid -->
       <div id="player-cards-container"></div>
 
+      <!-- Hole-by-Hole Breakdown -->
       <div class="section-header" style="margin-top:24px">
         <span class="section-label" style="font-size:16px">Hole Breakdown</span>
         <div class="section-header-line"></div>
       </div>
       <p style="font-family:'Barlow Condensed',sans-serif;font-size:12px;color:var(--muted);margin-bottom:12px;letter-spacing:1px;">Average gross score per hole across all rounds played</p>
       <div id="hole-breakdown-container"></div>
+
     </div>
   </div>
+
 
   <div id="rules" class="section">
     <div class="section-header"><span class="section-label">League Rules</span><div class="section-header-line"></div></div>
@@ -142,6 +153,7 @@
       </div>
 
       <div id="scorecard-tab">
+        <!-- Setup -->
         <div class="entry-card">
           <div class="entry-title">Match Setup</div>
           <label class="field-label">Scheduled Match</label>
@@ -161,6 +173,7 @@
           </div>
         </div>
 
+        <!-- Team 1 -->
         <div class="entry-card">
           <div class="entry-title" style="color:var(--green)">Team 1</div>
           <div>
@@ -177,6 +190,7 @@
           </div>
         </div>
 
+        <!-- Team 2 -->
         <div class="entry-card">
           <div class="entry-title" style="color:var(--ice)">Team 2</div>
           <div>
@@ -193,6 +207,7 @@
           </div>
         </div>
 
+        <!-- Live Scorecard -->
         <div class="entry-card" id="scorecard-card" style="display:none">
           <div class="entry-title">⛳ Live Scorecard
             <span style="font-family:'Barlow Condensed',sans-serif;font-size:11px;color:var(--muted);font-weight:400;letter-spacing:1px;margin-left:8px;">★ = stroke hole</span>
@@ -200,6 +215,7 @@
           <div class="scorecard-wrap"><table class="scorecard" id="live-scorecard"></table></div>
         </div>
 
+        <!-- Save Bar — always visible once scorecard shown -->
         <div class="save-bar" id="save-bar" style="display:none">
           <div class="save-bar-title">Match Result</div>
           <div class="match-status-display" id="status-display">—</div>
@@ -208,6 +224,7 @@
           <div class="success-msg" id="sc-success">✅ Match saved! Standings updated.</div>
         </div>
       </div>
+
 
       <div id="note-tab" style="display:none">
         <div class="entry-card">
@@ -264,8 +281,8 @@
 
 <div class="footer">Hockey Guys Golf League &nbsp;·&nbsp; 2026 Season &nbsp;·&nbsp; Twin Hills · Spencerport NY</div>
 
-<script src="admin.js?v=4.0"></script>
-<script src="polish.js?v=4.0"></script>
+<script src="admin.js?v=4.1"></script>
+<script src="polish.js?v=4.1"></script>
 
 </body>
 </html>

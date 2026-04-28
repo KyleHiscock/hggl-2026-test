@@ -114,22 +114,16 @@ function logoImg(name, cls, phCls) {
 
 
 // ── GOOGLE SHEETS SYNC ──
-// Public deployed Apps Script URL. Use the /exec URL for the live GitHub site, not the /dev URL.
+// Live Apps Script endpoint. Uses JSONP so it works consistently on GitHub Pages, desktop, and mobile browsers.
 const LEAGUE_API_URL = 'https://script.google.com/macros/s/AKfycbz4eI7d0ynxp1CCwsCV5o9LNB_sTXLcO9lVY3LiDAK6/exec';
 const USE_GOOGLE_SHEETS_SYNC = true;
-
 let LEAGUE_DATA_SOURCE = 'local';
 let LEAGUE_DATA_LAST_LOADED = '';
 let LEAGUE_API_DATA = null;
 
-/**
- * Normalizes team names across the whole site.
- * Official team name: Putting Goons
- */
 function normalizeTeamName(name) {
   const n = String(name || '').trim();
   const lower = n.toLowerCase();
-
   if (
     lower === 'the putter goons' ||
     lower === 'putter goons' ||
@@ -138,17 +132,13 @@ function normalizeTeamName(name) {
   ) {
     return 'Putting Goons';
   }
-
   return n;
 }
 
 function formatSheetDate(value) {
   if (!value) return '';
-
   const d = new Date(value);
-
   if (isNaN(d.getTime())) return String(value);
-
   return d.toLocaleDateString('en-US', {
     month: 'short',
     day: 'numeric',
@@ -157,17 +147,7 @@ function formatSheetDate(value) {
   });
 }
 
-function getSheetValue(row, keys, fallback = '') {
-  for (const key of keys) {
-    if (row[key] !== undefined && row[key] !== null && row[key] !== '') {
-      return row[key];
-    }
-  }
-
-  return fallback;
-}
-
-function parseNumber(value, fallback = 0) {
+function parseSheetNumber(value, fallback = 0) {
   const n = Number(value);
   return isNaN(n) ? fallback : n;
 }
@@ -177,27 +157,19 @@ function buildTeamsFromSheet(data) {
 
   (data.players || []).forEach(p => {
     if (String(p['Active?'] || p.Active || '').toLowerCase() === 'no') return;
-
     const team = normalizeTeamName(p.Team);
-
     if (!team) return;
-
     if (!playersByTeam[team]) playersByTeam[team] = [];
-
-    if (p['Player Name']) {
-      playersByTeam[team].push(p['Player Name']);
-    }
+    if (p['Player Name']) playersByTeam[team].push(p['Player Name']);
   });
 
   const standingsByTeam = {};
-
   (data.standings || []).forEach(s => {
     const team = normalizeTeamName(s.Team || s['Display Name'] || s['Short Name']);
-
     if (team) standingsByTeam[team] = s;
   });
 
-  const sheetTeams = data.teams && data.teams.length
+  const sheetTeams = (data.teams && data.teams.length)
     ? data.teams
     : DEFAULT_TEAMS.map(t => ({ 'Display Name': t.name }));
 
@@ -206,9 +178,7 @@ function buildTeamsFromSheet(data) {
     .map(t => {
       const name = normalizeTeamName(t['Display Name'] || t['Short Name'] || t.name);
       const st = standingsByTeam[name] || {};
-
       const defaultTeam = DEFAULT_TEAMS.find(x => normalizeTeamName(x.name) === name);
-
       const players = playersByTeam[name] && playersByTeam[name].length
         ? playersByTeam[name].join(' & ')
         : defaultTeam
@@ -218,12 +188,12 @@ function buildTeamsFromSheet(data) {
       return {
         name,
         players,
-        w: parseNumber(st.W || st.Wins || 0),
-        l: parseNumber(st.L || st.Losses || 0),
-        holesWon: parseNumber(st.HW || st.HolesWon || 0),
-        holesLost: parseNumber(st.HL || st.HolesLost || 0),
-        holeDiff: parseNumber(st.HDiff || st['Hole Differential'] || 0),
-        matches: parseNumber(st.Matches || 0),
+        w: parseSheetNumber(st.W || st.Wins || 0),
+        l: parseSheetNumber(st.L || st.Losses || 0),
+        holesWon: parseSheetNumber(st.HW || st.HolesWon || 0),
+        holesLost: parseSheetNumber(st.HL || st.HolesLost || 0),
+        holeDiff: parseSheetNumber(st.HDiff || st['Hole Differential'] || 0),
+        matches: parseSheetNumber(st.Matches || 0),
         playoffOpponent: st['Opening Round If Playoffs Started Today'] || ''
       };
     });
@@ -234,7 +204,6 @@ function buildScheduleFromSheet(data) {
 
   (data.schedule || []).forEach(row => {
     const week = Number(row.Week || row.week || 0);
-
     if (!week) return;
 
     if (!byWeek[week]) {
@@ -263,13 +232,7 @@ function buildScheduleFromSheet(data) {
 
 function normalizeResultFromSheet(row) {
   let parsedScores = null;
-
-  const rawScores =
-    row.PlayerScoresJSON ||
-    row['Score Snapshot JSON'] ||
-    row.ScoreSnapshotJSON ||
-    row.scoreSnapshotJson ||
-    '';
+  const rawScores = row.PlayerScoresJSON || row['Score Snapshot JSON'] || row.ScoreSnapshotJSON || row.scoreSnapshotJson || '';
 
   try {
     parsedScores = rawScores ? JSON.parse(rawScores) : null;
@@ -277,19 +240,11 @@ function normalizeResultFromSheet(row) {
     parsedScores = null;
   }
 
-  const playerScores = parsedScores && typeof parsedScores === 'object'
-    ? parsedScores
-    : {};
-
-  const team1 = normalizeTeamName(row.Team1 || row['Team 1'] || row.team1 || '');
-  const team2 = normalizeTeamName(row.Team2 || row['Team 2'] || row.team2 || '');
-  const winner = normalizeTeamName(row.Winner || row.winner || '');
-
+  const playerScores = parsedScores && typeof parsedScores === 'object' ? parsedScores : {};
   const playersSnapshot = playerScores.playersSnapshot || row.playersSnapshot || [];
   const scoreSnapshot = playerScores.scoreSnapshot || row.scoreSnapshot || {};
 
   let playerLine = row.PlayerLine || row.playerLine || '';
-
   if (!playerLine && Array.isArray(playersSnapshot) && playersSnapshot.length >= 4) {
     playerLine = `${playersSnapshot[0].name || 'Player A'} & ${playersSnapshot[1].name || 'Player B'} vs ${playersSnapshot[2].name || 'Player C'} & ${playersSnapshot[3].name || 'Player D'}`;
   }
@@ -300,12 +255,12 @@ function normalizeResultFromSheet(row) {
     week: Number(row.Week || row.week || 0),
     date: row.Date || row.date || '',
     side: row.Side || row.side || '',
-    team1,
-    team2,
-    winner,
+    team1: normalizeTeamName(row.Team1 || row['Team 1'] || row.team1 || ''),
+    team2: normalizeTeamName(row.Team2 || row['Team 2'] || row.team2 || ''),
+    winner: normalizeTeamName(row.Winner || row.winner || ''),
     matchResult: row.MatchResult || row['Result Text'] || row.matchResult || '',
-    team1HolesWon: parseNumber(row.Team1HolesWon || row['Team 1 Holes Won'] || row.team1HolesWon || 0),
-    team2HolesWon: parseNumber(row.Team2HolesWon || row['Team 2 Holes Won'] || row.team2HolesWon || 0),
+    team1HolesWon: parseSheetNumber(row.Team1HolesWon || row['Team 1 Holes Won'] || row.team1HolesWon || 0),
+    team2HolesWon: parseSheetNumber(row.Team2HolesWon || row['Team 2 Holes Won'] || row.team2HolesWon || 0),
     playerLine,
     holesPlayed: Number(row.HolesPlayed || row.holesPlayed || 0),
     playersSnapshot,
@@ -315,7 +270,6 @@ function normalizeResultFromSheet(row) {
 
 function applyLeagueDataFromSheet(data) {
   LEAGUE_API_DATA = data;
-
   TEAMS = buildTeamsFromSheet(data);
 
   if (data.schedule && data.schedule.length) {
@@ -330,163 +284,93 @@ function applyLeagueDataFromSheet(data) {
     localStorage.setItem('hggl2026_commissioner_note', String(data.commissionerNote));
   }
 
+  LEAGUE_DATA_SOURCE = 'Google Sheets JSONP';
+  LEAGUE_DATA_LAST_LOADED = new Date().toLocaleString('en-US', { timeZone: 'America/New_York' });
 }
 
-/**
- * Loads league data through JSONP.
- * This avoids GitHub Pages / Apps Script fetch issues and includes a cache-buster.
- */
-function fetchLeagueDataFromSheets(silent = false) {
-  if (!USE_GOOGLE_SHEETS_SYNC || !LEAGUE_API_URL) return Promise.resolve(false);
-
-  return new Promise(resolve => {
-    const callbackName = 'hgglLeagueDataCallback_' + Date.now() + '_' + Math.floor(Math.random() * 100000);
-    const cacheBust = Date.now();
-
-    const script = document.createElement('script');
-
-    const cleanup = () => {
-      try {
-        delete window[callbackName];
-      } catch (e) {
-        window[callbackName] = undefined;
-      }
-
-      if (script && script.parentNode) {
-        script.parentNode.removeChild(script);
-      }
-    };
-
-    const timeout = setTimeout(() => {
-      cleanup();
-      console.warn('Google Sheets JSONP sync timed out.');
-      LEAGUE_DATA_SOURCE = 'local fallback';
-
-      if (!silent) {
-        alert('Could not load Google Sheets data. The site is using the local backup for now.');
-      }
-
-      resolve(false);
-    }, 12000);
-
-    window[callbackName] = function(json) {
-      clearTimeout(timeout);
-
-      try {
-        if (!json || !json.ok) {
-          throw new Error((json && json.error) || 'Google Sheets API returned an error.');
-        }
-
-        applyLeagueDataFromSheet(json.data || {});
-        rebuildAll();
-
-        if (typeof initCommissionerNoteEditor === 'function') {
-          initCommissionerNoteEditor();
-        }
-
-        cleanup();
-        resolve(true);
-      } catch (err) {
-        console.warn('Google Sheets JSONP sync failed; using local fallback.', err);
-        LEAGUE_DATA_SOURCE = 'local fallback';
-
-        if (!silent) {
-          alert('Could not load Google Sheets data. The site is using the local backup for now.');
-        }
-
-        cleanup();
-        resolve(false);
-      }
-    };
-
-    script.onerror = function() {
-      clearTimeout(timeout);
-      cleanup();
-
-      console.warn('Google Sheets JSONP script failed to load.');
-      LEAGUE_DATA_SOURCE = 'local fallback';
-
-      if (!silent) {
-        alert('Could not load Google Sheets data. The site is using the local backup for now.');
-      }
-
-      resolve(false);
-    };
-
-    script.src = LEAGUE_API_URL +
-      '?action=getLeagueData' +
-      '&callback=' + encodeURIComponent(callbackName) +
-      '&v=' + encodeURIComponent(cacheBust);
-
-    document.body.appendChild(script);
-  });
-}
-
-/**
- * Sends admin actions through JSONP using a payload parameter.
- * Used for note saves, result saves, edits, and deletes.
- */
-function postLeagueAction(action, payload = {}) {
-  const adminKey = getAdminKey();
-
-  const body = {
-    adminKey,
-    ...payload
-  };
-
+function leagueJsonpRequest(action, payload = {}) {
   return new Promise((resolve, reject) => {
-    const callbackName = 'hgglAdminActionCallback_' + Date.now() + '_' + Math.floor(Math.random() * 100000);
-    const cacheBust = Date.now();
+    if (!LEAGUE_API_URL) {
+      reject(new Error('Missing Google Sheets API URL.'));
+      return;
+    }
 
+    const callbackName = 'hgglJsonp_' + Date.now() + '_' + Math.random().toString(36).slice(2);
     const script = document.createElement('script');
 
-    const cleanup = () => {
-      try {
-        delete window[callbackName];
-      } catch (e) {
-        window[callbackName] = undefined;
-      }
-
-      if (script && script.parentNode) {
-        script.parentNode.removeChild(script);
-      }
-    };
-
-    const timeout = setTimeout(() => {
+    const timer = setTimeout(() => {
       cleanup();
-      reject(new Error('Google Sheets script request timed out.'));
+      reject(new Error('Google Sheets request timed out.'));
     }, 15000);
 
-    window[callbackName] = function(json) {
-      clearTimeout(timeout);
+    function cleanup() {
+      clearTimeout(timer);
+      try { delete window[callbackName]; } catch (e) { window[callbackName] = undefined; }
+      if (script && script.parentNode) script.parentNode.removeChild(script);
+    }
 
-      try {
-        if (!json || !json.ok) {
-          throw new Error((json && json.error) || 'Google Sheets script request failed.');
-        }
-
-        cleanup();
-        resolve(json);
-      } catch (err) {
-        cleanup();
-        reject(err);
+    window[callbackName] = function(response) {
+      cleanup();
+      if (!response || response.ok === false) {
+        reject(new Error((response && response.error) || 'Google Sheets API returned an error.'));
+        return;
       }
+      resolve(response);
     };
 
+    const params = new URLSearchParams();
+    params.set('action', action);
+    params.set('callback', callbackName);
+    params.set('v', String(Date.now()));
+
+    if (payload && Object.keys(payload).length) {
+      params.set('payload', JSON.stringify(payload));
+    }
+
     script.onerror = function() {
-      clearTimeout(timeout);
       cleanup();
       reject(new Error('Google Sheets script request failed.'));
     };
 
-    script.src = LEAGUE_API_URL +
-      '?action=' + encodeURIComponent(action) +
-      '&payload=' + encodeURIComponent(JSON.stringify(body)) +
-      '&callback=' + encodeURIComponent(callbackName) +
-      '&v=' + encodeURIComponent(cacheBust);
-
-    document.body.appendChild(script);
+    script.src = LEAGUE_API_URL + '?' + params.toString();
+    document.head.appendChild(script);
   });
+}
+
+async function fetchLeagueDataFromSheets(silent = false) {
+  if (!USE_GOOGLE_SHEETS_SYNC || !LEAGUE_API_URL) return false;
+
+  try {
+    const json = await leagueJsonpRequest('getLeagueData');
+    applyLeagueDataFromSheet(json.data || {});
+    rebuildAll();
+
+    if (typeof initCommissionerNoteEditor === 'function') {
+      initCommissionerNoteEditor();
+    }
+
+    return true;
+  } catch (err) {
+    console.warn('Google Sheets sync failed; using local fallback.', err);
+    LEAGUE_DATA_SOURCE = 'local fallback';
+
+    if (!silent) {
+      alert('Could not load Google Sheets data. The site is using the local backup for now.');
+    }
+
+    return false;
+  }
+}
+
+async function postLeagueAction(action, payload = {}) {
+  const adminKey = getAdminKey();
+  const json = await leagueJsonpRequest(action, { adminKey, ...payload });
+
+  if (!json.ok) {
+    throw new Error(json.error || 'Google Sheets API returned an error.');
+  }
+
+  return json;
 }
 
 function getAdminKey() {
@@ -669,7 +553,6 @@ function buildDashboard() {
     .replace(/\"/g, "&quot;")
     .replace(/'/g, "&#039;")
     .replace(/\n/g, "<br>");
-  const dataSourceText = `Data source: ${LEAGUE_DATA_SOURCE}${LEAGUE_DATA_LAST_LOADED ? " · Updated " + LEAGUE_DATA_LAST_LOADED : ""}`;
 
   container.innerHTML = `
     <div class="dashboard-panel update-card">
@@ -677,7 +560,6 @@ function buildDashboard() {
       <div>
         <div class="update-title">Commissioner Note</div>
         <div class="update-copy">${safeNote}</div>
-        <div class="data-source-note">${dataSourceText}</div>
       </div>
     </div>
     <div class="dashboard-grid dashboard-grid-two">

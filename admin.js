@@ -118,7 +118,7 @@ function logoImg(name, cls, phCls) {
 
 
 // ── GOOGLE SHEETS SYNC ──
-// Public deployed Apps Script URL. Use the /exec URL for the live GitHub site, not the /dev URL.
+// Live Apps Script endpoint. Uses JSONP so it works consistently on GitHub Pages, desktop, and mobile browsers.
 const LEAGUE_API_URL = 'https://script.google.com/macros/s/AKfycbz4eI7d0ynxp1CCwsCV5o9LNB_sTXLcO9lVY3LiDAK6/exec';
 const USE_GOOGLE_SHEETS_SYNC = true;
 let LEAGUE_DATA_SOURCE = 'local';
@@ -127,61 +127,101 @@ let LEAGUE_API_DATA = null;
 
 function normalizeTeamName(name) {
   const n = String(name || '').trim();
-  if(n === 'Putting Goons') return 'The Putter Goons';
+  const lower = n.toLowerCase();
+  if (
+    lower === 'the putter goons' ||
+    lower === 'putter goons' ||
+    lower === 'the putting goons' ||
+    lower === 'putting goons'
+  ) {
+    return 'Putting Goons';
+  }
   return n;
 }
 
 function formatSheetDate(value) {
-  if(!value) return '';
+  if (!value) return '';
   const d = new Date(value);
-  if(isNaN(d.getTime())) return String(value);
-  return d.toLocaleDateString('en-US', { month:'short', day:'numeric', year:'numeric', timeZone:'America/New_York' });
+  if (isNaN(d.getTime())) return String(value);
+  return d.toLocaleDateString('en-US', {
+    month: 'short',
+    day: 'numeric',
+    year: 'numeric',
+    timeZone: 'America/New_York'
+  });
+}
+
+function parseSheetNumber(value, fallback = 0) {
+  const n = Number(value);
+  return isNaN(n) ? fallback : n;
 }
 
 function buildTeamsFromSheet(data) {
   const playersByTeam = {};
+
   (data.players || []).forEach(p => {
-    if(String(p['Active?'] || p.Active || '').toLowerCase() === 'no') return;
+    if (String(p['Active?'] || p.Active || '').toLowerCase() === 'no') return;
     const team = normalizeTeamName(p.Team);
-    if(!team) return;
-    if(!playersByTeam[team]) playersByTeam[team] = [];
-    if(p['Player Name']) playersByTeam[team].push(p['Player Name']);
+    if (!team) return;
+    if (!playersByTeam[team]) playersByTeam[team] = [];
+    if (p['Player Name']) playersByTeam[team].push(p['Player Name']);
   });
 
   const standingsByTeam = {};
   (data.standings || []).forEach(s => {
     const team = normalizeTeamName(s.Team || s['Display Name'] || s['Short Name']);
-    if(team) standingsByTeam[team] = s;
+    if (team) standingsByTeam[team] = s;
   });
 
-  const sheetTeams = (data.teams && data.teams.length) ? data.teams : DEFAULT_TEAMS.map(t => ({'Display Name': t.name}));
+  const sheetTeams = (data.teams && data.teams.length)
+    ? data.teams
+    : DEFAULT_TEAMS.map(t => ({ 'Display Name': t.name }));
+
   return sheetTeams
     .filter(t => String(t.Status || 'Active').toLowerCase() !== 'inactive')
     .map(t => {
       const name = normalizeTeamName(t['Display Name'] || t['Short Name'] || t.name);
       const st = standingsByTeam[name] || {};
-      const players = playersByTeam[name] && playersByTeam[name].length ? playersByTeam[name].join(' & ') : (DEFAULT_TEAMS.find(x => normalizeTeamName(x.name) === name)?.players || '');
+      const defaultTeam = DEFAULT_TEAMS.find(x => normalizeTeamName(x.name) === name);
+      const players = playersByTeam[name] && playersByTeam[name].length
+        ? playersByTeam[name].join(' & ')
+        : defaultTeam
+          ? defaultTeam.players
+          : '';
+
       return {
         name,
         players,
-        w: Number(st.W || st.Wins || 0),
-        l: Number(st.L || st.Losses || 0),
-        holesWon: Number(st.HW || st.HolesWon || 0),
-        holesLost: Number(st.HL || st.HolesLost || 0)
+        w: parseSheetNumber(st.W || st.Wins || 0),
+        l: parseSheetNumber(st.L || st.Losses || 0),
+        holesWon: parseSheetNumber(st.HW || st.HolesWon || 0),
+        holesLost: parseSheetNumber(st.HL || st.HolesLost || 0),
+        holeDiff: parseSheetNumber(st.HDiff || st['Hole Differential'] || 0),
+        matches: parseSheetNumber(st.Matches || 0),
+        playoffOpponent: st['Opening Round If Playoffs Started Today'] || ''
       };
     });
 }
 
 function buildScheduleFromSheet(data) {
   const byWeek = {};
+
   (data.schedule || []).forEach(row => {
     const week = Number(row.Week || row.week || 0);
-    if(!week) return;
-    if(!byWeek[week]) {
-      byWeek[week] = { week, date: formatSheetDate(row.Date), side: row.Side || '', matchups: [] };
+    if (!week) return;
+
+    if (!byWeek[week]) {
+      byWeek[week] = {
+        week,
+        date: formatSheetDate(row.Date),
+        side: row.Side || '',
+        matchups: []
+      };
     }
+
     const home = normalizeTeamName(row['Team 1'] || row.Team1 || row.home || '');
     const away = normalizeTeamName(row['Team 2'] || row.Team2 || row.away || '');
+
     byWeek[week].matchups.push({
       time: row['Tee Time'] || row.TeeTime || '',
       home: home || 'TBD',
@@ -190,14 +230,29 @@ function buildScheduleFromSheet(data) {
       matchId: row.MatchID || ''
     });
   });
-  return Object.values(byWeek).sort((a,b)=>a.week-b.week);
+
+  return Object.values(byWeek).sort((a, b) => a.week - b.week);
 }
 
 function normalizeResultFromSheet(row) {
   let parsedScores = null;
   const rawScores = row.PlayerScoresJSON || row['Score Snapshot JSON'] || row.ScoreSnapshotJSON || row.scoreSnapshotJson || '';
-  try { parsedScores = rawScores ? JSON.parse(rawScores) : null; } catch(e) { parsedScores = null; }
+
+  try {
+    parsedScores = rawScores ? JSON.parse(rawScores) : null;
+  } catch (e) {
+    parsedScores = null;
+  }
+
   const playerScores = parsedScores && typeof parsedScores === 'object' ? parsedScores : {};
+  const playersSnapshot = playerScores.playersSnapshot || row.playersSnapshot || [];
+  const scoreSnapshot = playerScores.scoreSnapshot || row.scoreSnapshot || {};
+
+  let playerLine = row.PlayerLine || row.playerLine || '';
+  if (!playerLine && Array.isArray(playersSnapshot) && playersSnapshot.length >= 4) {
+    playerLine = `${playersSnapshot[0].name || 'Player A'} & ${playersSnapshot[1].name || 'Player B'} vs ${playersSnapshot[2].name || 'Player C'} & ${playersSnapshot[3].name || 'Player D'}`;
+  }
+
   return {
     resultId: row.ResultID || row.resultId || '',
     matchId: row.MatchID || row.matchId || '',
@@ -208,36 +263,45 @@ function normalizeResultFromSheet(row) {
     team2: normalizeTeamName(row.Team2 || row['Team 2'] || row.team2 || ''),
     winner: normalizeTeamName(row.Winner || row.winner || ''),
     matchResult: row.MatchResult || row['Result Text'] || row.matchResult || '',
-    team1HolesWon: Number(row.Team1HolesWon || row['Team 1 Holes Won'] || row.team1HolesWon || 0),
-    team2HolesWon: Number(row.Team2HolesWon || row['Team 2 Holes Won'] || row.team2HolesWon || 0),
-    playerLine: row.PlayerLine || row.playerLine || '',
+    team1HolesWon: parseSheetNumber(row.Team1HolesWon || row['Team 1 Holes Won'] || row.team1HolesWon || 0),
+    team2HolesWon: parseSheetNumber(row.Team2HolesWon || row['Team 2 Holes Won'] || row.team2HolesWon || 0),
+    playerLine,
     holesPlayed: Number(row.HolesPlayed || row.holesPlayed || 0),
-    playersSnapshot: playerScores.playersSnapshot || row.playersSnapshot || [],
-    scoreSnapshot: playerScores.scoreSnapshot || row.scoreSnapshot || {}
+    playersSnapshot,
+    scoreSnapshot
   };
 }
 
 function applyLeagueDataFromSheet(data) {
   LEAGUE_API_DATA = data;
   TEAMS = buildTeamsFromSheet(data);
-  if(data.schedule && data.schedule.length) SCHEDULE_WEEKS = buildScheduleFromSheet(data);
-  RESULTS = (data.results || []).map(normalizeResultFromSheet).filter(r => r.week && r.team1 && r.team2);
-  if(data.commissionerNote !== undefined && data.commissionerNote !== null) {
+
+  if (data.schedule && data.schedule.length) {
+    SCHEDULE_WEEKS = buildScheduleFromSheet(data);
+  }
+
+  RESULTS = (data.results || [])
+    .map(normalizeResultFromSheet)
+    .filter(r => r.week && r.team1 && r.team2);
+
+  if (data.commissionerNote !== undefined && data.commissionerNote !== null) {
     localStorage.setItem('hggl2026_commissioner_note', String(data.commissionerNote));
   }
-  LEAGUE_DATA_SOURCE = 'Google Sheets';
-  LEAGUE_DATA_LAST_LOADED = new Date().toLocaleString('en-US', { timeZone:'America/New_York' });
+
+  LEAGUE_DATA_SOURCE = 'Google Sheets JSONP';
+  LEAGUE_DATA_LAST_LOADED = new Date().toLocaleString('en-US', { timeZone: 'America/New_York' });
 }
 
-function leagueJsonpRequest(action, payload={}) {
+function leagueJsonpRequest(action, payload = {}) {
   return new Promise((resolve, reject) => {
-    if(!LEAGUE_API_URL) {
+    if (!LEAGUE_API_URL) {
       reject(new Error('Missing Google Sheets API URL.'));
       return;
     }
 
     const callbackName = 'hgglJsonp_' + Date.now() + '_' + Math.random().toString(36).slice(2);
     const script = document.createElement('script');
+
     const timer = setTimeout(() => {
       cleanup();
       reject(new Error('Google Sheets request timed out.'));
@@ -245,13 +309,13 @@ function leagueJsonpRequest(action, payload={}) {
 
     function cleanup() {
       clearTimeout(timer);
-      try { delete window[callbackName]; } catch(e) { window[callbackName] = undefined; }
-      if(script && script.parentNode) script.parentNode.removeChild(script);
+      try { delete window[callbackName]; } catch (e) { window[callbackName] = undefined; }
+      if (script && script.parentNode) script.parentNode.removeChild(script);
     }
 
     window[callbackName] = function(response) {
       cleanup();
-      if(!response || response.ok === false) {
+      if (!response || response.ok === false) {
         reject(new Error((response && response.error) || 'Google Sheets API returned an error.'));
         return;
       }
@@ -262,7 +326,8 @@ function leagueJsonpRequest(action, payload={}) {
     params.set('action', action);
     params.set('callback', callbackName);
     params.set('v', String(Date.now()));
-    if(payload && Object.keys(payload).length) {
+
+    if (payload && Object.keys(payload).length) {
       params.set('payload', JSON.stringify(payload));
     }
 
@@ -276,27 +341,39 @@ function leagueJsonpRequest(action, payload={}) {
   });
 }
 
-async function fetchLeagueDataFromSheets(silent=false) {
-  if(!USE_GOOGLE_SHEETS_SYNC || !LEAGUE_API_URL) return false;
+async function fetchLeagueDataFromSheets(silent = false) {
+  if (!USE_GOOGLE_SHEETS_SYNC || !LEAGUE_API_URL) return false;
+
   try {
     const json = await leagueJsonpRequest('getLeagueData');
     applyLeagueDataFromSheet(json.data || {});
-    LEAGUE_DATA_SOURCE = 'Google Sheets JSONP';
     rebuildAll();
-    if(typeof initCommissionerNoteEditor === 'function') initCommissionerNoteEditor();
+
+    if (typeof initCommissionerNoteEditor === 'function') {
+      initCommissionerNoteEditor();
+    }
+
     return true;
-  } catch(err) {
+  } catch (err) {
     console.warn('Google Sheets sync failed; using local fallback.', err);
     LEAGUE_DATA_SOURCE = 'local fallback';
-    if(!silent) alert('Could not load Google Sheets data. The site is using the local backup for now.');
+
+    if (!silent) {
+      alert('Could not load Google Sheets data. The site is using the local backup for now.');
+    }
+
     return false;
   }
 }
 
-async function postLeagueAction(action, payload={}) {
+async function postLeagueAction(action, payload = {}) {
   const adminKey = getAdminKey();
   const json = await leagueJsonpRequest(action, { adminKey, ...payload });
-  if(!json.ok) throw new Error(json.error || 'Google Sheets API returned an error.');
+
+  if (!json.ok) {
+    throw new Error(json.error || 'Google Sheets API returned an error.');
+  }
+
   return json;
 }
 
