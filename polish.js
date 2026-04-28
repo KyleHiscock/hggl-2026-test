@@ -42,7 +42,7 @@ function buildDashboard() {
       <div class="dashboard-panel"><div class="panel-title">Next Matchups · Week ${nextWeek ? nextWeek.week : 'TBD'}</div>${nextHtml}</div>
       <div class="dashboard-panel"><div class="panel-title">Standings Snapshot</div>${miniRows || '<div class="dash-empty">Standings will populate after scores are entered.</div>'}</div>
     </div>
-    <div class="dashboard-panel playoff-dashboard"><div class="panel-title">If Playoffs Started Today</div><div class="dash-empty" style="margin-bottom:10px">Opening-round bracket based on current standings. Standings ties are sorted by total holes won. All 8 teams make it, then teams reseed after each round.</div><div id="playoff-picture-container"></div></div>`;
+    <div class="dashboard-panel playoff-dashboard"><div class="panel-title">If Playoffs Started Today</div><div class="dash-empty" style="margin-bottom:10px">Opening-round bracket based on current standings. If teams have the same record, total holes won is the standings tiebreaker. All 8 teams make it, then teams reseed after each round.</div><div id="playoff-picture-container"></div></div>`;
   buildPlayoffPicture();
 }
 

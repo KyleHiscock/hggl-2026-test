@@ -218,8 +218,8 @@ function buildStandingsTable() {
         <div class="t-players">${t.players}</div>
       </div></div></td>
       <td class="w-cell">${t.w}</td>
-      <td class="hw-cell">${t.holesWon || 0}</td>
       <td class="l-cell">${t.l}</td>
+      <td class="hw-cell">${t.holesWon || 0}</td>
     </tr>`;
   }).join('');
 }
@@ -239,9 +239,9 @@ function buildCards() {
         <div class="card-record">
           <div class="card-stat wins"><div class="card-stat-num">${t.w}</div><div class="card-stat-label">Wins</div></div>
           <div class="card-divider"></div>
-          <div class="card-stat holes"><div class="card-stat-num">${t.holesWon || 0}</div><div class="card-stat-label">Holes Won</div></div>
-          <div class="card-divider"></div>
           <div class="card-stat losses"><div class="card-stat-num">${t.l}</div><div class="card-stat-label">Losses</div></div>
+          <div class="card-divider"></div>
+          <div class="card-stat holes"><div class="card-stat-num">${t.holesWon || 0}</div><div class="card-stat-label">Holes Won</div></div>
         </div>
       </div>
     </div>`;
@@ -285,8 +285,8 @@ function buildDashboard() {
 function getSortedStandings() {
   return [...TEAMS].sort((a,b)=>
     (b.w - a.w) ||
-    ((b.holesWon || 0) - (a.holesWon || 0)) ||
     (a.l - b.l) ||
+    ((b.holesWon || 0) - (a.holesWon || 0)) ||
     a.name.localeCompare(b.name)
   );
 }
