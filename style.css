@@ -320,3 +320,6 @@ body{font-family:'Barlow',sans-serif;background:var(--dark);color:var(--text);mi
 .rule-list{font-family:'Barlow Condensed',sans-serif;font-size:14px;line-height:1.55;color:var(--muted);letter-spacing:.4px;margin:10px 0 0 20px;padding-left:10px;}
 .rule-list li{margin-bottom:4px;}
 @media(max-width:640px){.rules-grid{grid-template-columns:1fr}.rule-card-wide{grid-column:auto}}
+
+.footer-admin-link{display:inline-flex;align-items:center;justify-content:center;margin-top:10px;width:24px;height:24px;border-radius:50%;text-decoration:none;color:rgba(107,130,153,0.42);font-size:13px;transition:all 0.2s ease;}
+.footer-admin-link:hover{color:var(--gold);background:rgba(245,197,24,0.08);}
