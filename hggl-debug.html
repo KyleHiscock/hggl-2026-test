@@ -1,0 +1,209 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>HGGL Debug</title>
+<style>
+  body { font-family: monospace; background: #111; color: #eee; padding: 16px; font-size: 13px; }
+  h2 { color: #f5c518; margin: 0 0 16px; }
+  .test { background: #1e2a3a; border-radius: 8px; padding: 12px; margin-bottom: 12px; }
+  .label { color: #9ab; font-size: 11px; text-transform: uppercase; letter-spacing: 1px; margin-bottom: 6px; }
+  .result { word-break: break-all; line-height: 1.5; }
+  .ok { color: #7cc77a; }
+  .fail { color: #d66060; }
+  .warn { color: #f5c518; }
+  .pending { color: #9ab; }
+  button { background: #f5c518; color: #111; border: none; border-radius: 8px; padding: 12px 20px;
+           font-family: monospace; font-weight: bold; font-size: 14px; cursor: pointer; width: 100%; margin-bottom: 12px; }
+</style>
+</head>
+<body>
+<h2>🏒 HGGL Diagnostic</h2>
+
+<button onclick="runAll()">▶ Run All Tests</button>
+
+<div class="test">
+  <div class="label">1. Browser Info</div>
+  <div class="result" id="r-browser">Tap Run to start</div>
+</div>
+
+<div class="test">
+  <div class="label">2. fetch() API Available</div>
+  <div class="result" id="r-fetch">—</div>
+</div>
+
+<div class="test">
+  <div class="label">3. AbortController Available</div>
+  <div class="result" id="r-abort">—</div>
+</div>
+
+<div class="test">
+  <div class="label">4. Apps Script Endpoint (fetch)</div>
+  <div class="result" id="r-endpoint">—</div>
+</div>
+
+<div class="test">
+  <div class="label">5. Response Structure</div>
+  <div class="result" id="r-structure">—</div>
+</div>
+
+<div class="test">
+  <div class="label">6. Teams Count</div>
+  <div class="result" id="r-teams">—</div>
+</div>
+
+<div class="test">
+  <div class="label">7. Standings Count</div>
+  <div class="result" id="r-standings">—</div>
+</div>
+
+<div class="test">
+  <div class="label">8. Results Count</div>
+  <div class="result" id="r-results">—</div>
+</div>
+
+<div class="test">
+  <div class="label">9. Commissioner Note</div>
+  <div class="result" id="r-note">—</div>
+</div>
+
+<div class="test">
+  <div class="label">10. public.js Loaded (TEAMS global)</div>
+  <div class="result" id="r-globals">—</div>
+</div>
+
+<div class="test">
+  <div class="label">11. DOM Elements Present</div>
+  <div class="result" id="r-dom">—</div>
+</div>
+
+<div class="test">
+  <div class="label">12. localStorage Available</div>
+  <div class="result" id="r-storage">—</div>
+</div>
+
+<div class="test">
+  <div class="label">Raw Response (first 400 chars)</div>
+  <div class="result" id="r-raw" style="font-size:11px;color:#9ab;">—</div>
+</div>
+
+<script>
+const API_URL = 'https://script.google.com/macros/s/AKfycbz4eI7d0ynxp1CCwsCV5o9LNB_sTXLcO9lVY3LiDAK6/exec';
+
+function set(id, html, cls) {
+  const el = document.getElementById(id);
+  el.innerHTML = html;
+  el.className = 'result ' + (cls || '');
+}
+
+async function runAll() {
+  // 1. Browser
+  set('r-browser', navigator.userAgent, 'warn');
+
+  // 2. fetch available
+  if (typeof fetch === 'function') {
+    set('r-fetch', '✅ fetch() is available', 'ok');
+  } else {
+    set('r-fetch', '❌ fetch() is NOT available — this browser cannot make requests', 'fail');
+    return;
+  }
+
+  // 3. AbortController
+  if (typeof AbortController === 'function') {
+    set('r-abort', '✅ AbortController available', 'ok');
+  } else {
+    set('r-abort', '⚠️ AbortController not available — timeout won\'t work but fetch should still work', 'warn');
+  }
+
+  // 4. Hit the endpoint
+  set('r-endpoint', '⏳ Fetching...', 'pending');
+  let json = null;
+  let rawText = '';
+  try {
+    const res = await fetch(API_URL + '?action=getLeagueData&v=' + Date.now());
+    rawText = await res.text();
+    set('r-raw', rawText.substring(0, 400), '');
+    if (!res.ok) {
+      set('r-endpoint', '❌ HTTP ' + res.status + ' — request failed', 'fail');
+      return;
+    }
+    try {
+      json = JSON.parse(rawText);
+      set('r-endpoint', '✅ Fetch succeeded, got valid JSON', 'ok');
+    } catch(e) {
+      set('r-endpoint', '❌ Response is not valid JSON: ' + e.message, 'fail');
+      return;
+    }
+  } catch(e) {
+    set('r-endpoint', '❌ Fetch threw an error: ' + e.message, 'fail');
+    set('r-raw', rawText || '(no response)', '');
+    return;
+  }
+
+  // 5. Response structure
+  if (json && json.ok === true && json.data) {
+    set('r-structure', '✅ json.ok=true, json.data exists', 'ok');
+  } else {
+    set('r-structure', '❌ Unexpected structure: ok=' + json.ok + ', has data=' + !!json.data, 'fail');
+  }
+
+  const data = json.data || {};
+
+  // 6. Teams
+  const teams = data.teams || [];
+  set('r-teams', teams.length > 0
+    ? '✅ ' + teams.length + ' teams: ' + teams.map(t => t['Display Name']).join(', ')
+    : '❌ No teams in response', teams.length > 0 ? 'ok' : 'fail');
+
+  // 7. Standings
+  const standings = data.standings || [];
+  set('r-standings', standings.length > 0
+    ? '✅ ' + standings.length + ' standing rows'
+    : '⚠️ standings array is EMPTY or missing — this means 0-0 records will show', standings.length > 0 ? 'ok' : 'warn');
+
+  // 8. Results
+  const results = data.results || [];
+  set('r-results', results.length > 0
+    ? '✅ ' + results.length + ' results'
+    : '⚠️ results array is empty', results.length > 0 ? 'ok' : 'warn');
+
+  // 9. Commissioner note
+  const note = data.commissionerNote || '';
+  set('r-note', note ? '✅ "' + note.substring(0, 80) + '"' : '⚠️ Empty', note ? 'ok' : 'warn');
+
+  // 10. Globals from public.js (only works if loaded on the actual site)
+  const hasTeams = typeof window.TEAMS !== 'undefined';
+  const hasFetch = typeof window.fetchLeagueDataFromSheets === 'function';
+  const hasRebuild = typeof window.rebuildAll === 'function';
+  set('r-globals',
+    'TEAMS global: ' + (hasTeams ? '✅' : '❌ not found') + ' | ' +
+    'fetchLeagueDataFromSheets: ' + (hasFetch ? '✅' : '❌') + ' | ' +
+    'rebuildAll: ' + (hasRebuild ? '✅' : '❌') +
+    ((!hasTeams && !hasFetch) ? ' — (expected if running standalone)' : ''),
+    hasTeams ? 'ok' : 'warn');
+
+  // 11. DOM elements
+  const ids = ['standings-body','dashboard-container','results-container','schedule-container'];
+  const found = ids.filter(id => document.getElementById(id));
+  const missing = ids.filter(id => !document.getElementById(id));
+  set('r-dom',
+    missing.length === ids.length
+      ? '⚠️ All missing — expected since this is standalone diagnostic page'
+      : missing.length === 0
+        ? '✅ All present'
+        : '❌ Missing: ' + missing.join(', '),
+    missing.length === ids.length ? 'warn' : missing.length === 0 ? 'ok' : 'fail');
+
+  // 12. localStorage
+  try {
+    localStorage.setItem('hggl_test', '1');
+    localStorage.removeItem('hggl_test');
+    set('r-storage', '✅ localStorage is available', 'ok');
+  } catch(e) {
+    set('r-storage', '❌ localStorage blocked: ' + e.message, 'fail');
+  }
+}
+</script>
+</body>
+</html>
