@@ -58,7 +58,7 @@ const DEFAULT_TEAMS = [
 
 let TEAMS = DEFAULT_TEAMS.map(t => ({...t}));
 
-const SCHEDULE_WEEKS = [
+let SCHEDULE_WEEKS = [
   {week:1, date:'May 5, 2026',  side:'Front 9', matchups:[
     {time:'4:20p', home:'Fairway Enforcers', away:'Rough Riders'},
     {time:'4:28p', home:'Bombs Away',        away:'Zambogeys'},
@@ -115,6 +115,162 @@ function logoImg(name, cls, phCls) {
   return `<div class="${phCls}">${init}</div>`;
 }
 
+
+
+// ── GOOGLE SHEETS SYNC ──
+// Public deployed Apps Script URL. Use the /exec URL for the live GitHub site, not the /dev URL.
+const LEAGUE_API_URL = 'https://script.google.com/macros/s/AKfycbz4eI7d0ynxp1CCwsCV5o9LNB_sTXLcO9lVY3LiDAK6/exec';
+const USE_GOOGLE_SHEETS_SYNC = true;
+let LEAGUE_DATA_SOURCE = 'local';
+let LEAGUE_DATA_LAST_LOADED = '';
+let LEAGUE_API_DATA = null;
+
+function normalizeTeamName(name) {
+  const n = String(name || '').trim();
+  if(n === 'Putting Goons') return 'The Putter Goons';
+  return n;
+}
+
+function formatSheetDate(value) {
+  if(!value) return '';
+  const d = new Date(value);
+  if(isNaN(d.getTime())) return String(value);
+  return d.toLocaleDateString('en-US', { month:'short', day:'numeric', year:'numeric', timeZone:'America/New_York' });
+}
+
+function buildTeamsFromSheet(data) {
+  const playersByTeam = {};
+  (data.players || []).forEach(p => {
+    if(String(p['Active?'] || p.Active || '').toLowerCase() === 'no') return;
+    const team = normalizeTeamName(p.Team);
+    if(!team) return;
+    if(!playersByTeam[team]) playersByTeam[team] = [];
+    if(p['Player Name']) playersByTeam[team].push(p['Player Name']);
+  });
+
+  const standingsByTeam = {};
+  (data.standings || []).forEach(s => {
+    const team = normalizeTeamName(s.Team || s['Display Name'] || s['Short Name']);
+    if(team) standingsByTeam[team] = s;
+  });
+
+  const sheetTeams = (data.teams && data.teams.length) ? data.teams : DEFAULT_TEAMS.map(t => ({'Display Name': t.name}));
+  return sheetTeams
+    .filter(t => String(t.Status || 'Active').toLowerCase() !== 'inactive')
+    .map(t => {
+      const name = normalizeTeamName(t['Display Name'] || t['Short Name'] || t.name);
+      const st = standingsByTeam[name] || {};
+      const players = playersByTeam[name] && playersByTeam[name].length ? playersByTeam[name].join(' & ') : (DEFAULT_TEAMS.find(x => normalizeTeamName(x.name) === name)?.players || '');
+      return {
+        name,
+        players,
+        w: Number(st.W || st.Wins || 0),
+        l: Number(st.L || st.Losses || 0),
+        holesWon: Number(st.HW || st.HolesWon || 0),
+        holesLost: Number(st.HL || st.HolesLost || 0)
+      };
+    });
+}
+
+function buildScheduleFromSheet(data) {
+  const byWeek = {};
+  (data.schedule || []).forEach(row => {
+    const week = Number(row.Week || row.week || 0);
+    if(!week) return;
+    if(!byWeek[week]) {
+      byWeek[week] = { week, date: formatSheetDate(row.Date), side: row.Side || '', matchups: [] };
+    }
+    const home = normalizeTeamName(row['Team 1'] || row.Team1 || row.home || '');
+    const away = normalizeTeamName(row['Team 2'] || row.Team2 || row.away || '');
+    byWeek[week].matchups.push({
+      time: row['Tee Time'] || row.TeeTime || '',
+      home: home || 'TBD',
+      away: away || 'TBD',
+      status: row.Status || '',
+      matchId: row.MatchID || ''
+    });
+  });
+  return Object.values(byWeek).sort((a,b)=>a.week-b.week);
+}
+
+function normalizeResultFromSheet(row) {
+  let parsedScores = null;
+  try { parsedScores = row.PlayerScoresJSON ? JSON.parse(row.PlayerScoresJSON) : null; } catch(e) { parsedScores = null; }
+  const playerScores = parsedScores && typeof parsedScores === 'object' ? parsedScores : {};
+  return {
+    resultId: row.ResultID || row.resultId || '',
+    week: Number(row.Week || row.week || 0),
+    date: row.Date || row.date || '',
+    side: row.Side || row.side || '',
+    team1: normalizeTeamName(row.Team1 || row['Team 1'] || row.team1 || ''),
+    team2: normalizeTeamName(row.Team2 || row['Team 2'] || row.team2 || ''),
+    winner: normalizeTeamName(row.Winner || row.winner || ''),
+    matchResult: row.MatchResult || row.matchResult || '',
+    team1HolesWon: Number(row.Team1HolesWon || row.team1HolesWon || 0),
+    team2HolesWon: Number(row.Team2HolesWon || row.team2HolesWon || 0),
+    playerLine: row.PlayerLine || row.playerLine || '',
+    holesPlayed: Number(row.HolesPlayed || row.holesPlayed || 0),
+    playersSnapshot: playerScores.playersSnapshot || row.playersSnapshot || [],
+    scoreSnapshot: playerScores.scoreSnapshot || row.scoreSnapshot || {}
+  };
+}
+
+function applyLeagueDataFromSheet(data) {
+  LEAGUE_API_DATA = data;
+  TEAMS = buildTeamsFromSheet(data);
+  if(data.schedule && data.schedule.length) SCHEDULE_WEEKS = buildScheduleFromSheet(data);
+  RESULTS = (data.results || []).map(normalizeResultFromSheet).filter(r => r.week && r.team1 && r.team2);
+  if(data.commissionerNote !== undefined && data.commissionerNote !== null) {
+    localStorage.setItem('hggl2026_commissioner_note', String(data.commissionerNote));
+  }
+  LEAGUE_DATA_SOURCE = 'Google Sheets';
+  LEAGUE_DATA_LAST_LOADED = new Date().toLocaleString('en-US', { timeZone:'America/New_York' });
+}
+
+async function fetchLeagueDataFromSheets(silent=false) {
+  if(!USE_GOOGLE_SHEETS_SYNC || !LEAGUE_API_URL) return false;
+  try {
+    const res = await fetch(LEAGUE_API_URL + '?action=getLeagueData&v=' + Date.now(), { cache:'no-store' });
+    const json = await res.json();
+    if(!json.ok) throw new Error(json.error || 'Google Sheets API returned an error.');
+    applyLeagueDataFromSheet(json.data || {});
+    rebuildAll();
+    if(typeof initCommissionerNoteEditor === 'function') initCommissionerNoteEditor();
+    return true;
+  } catch(err) {
+    console.warn('Google Sheets sync failed; using local fallback.', err);
+    LEAGUE_DATA_SOURCE = 'local fallback';
+    if(!silent) alert('Could not load Google Sheets data. The site is using the local backup for now.');
+    return false;
+  }
+}
+
+async function postLeagueAction(action, payload={}) {
+  const adminKey = getAdminKey();
+  const body = { action, adminKey, ...payload };
+  const res = await fetch(LEAGUE_API_URL, {
+    method: 'POST',
+    headers: { 'Content-Type': 'text/plain;charset=utf-8' },
+    body: JSON.stringify(body),
+  });
+  const json = await res.json();
+  if(!json.ok) throw new Error(json.error || 'Google Sheets API returned an error.');
+  return json;
+}
+
+function getAdminKey() {
+  return localStorage.getItem('hggl2026_admin_key') || 'hggl2026-hiscock-drexler';
+}
+
+function saveAdminKey(key) {
+  localStorage.setItem('hggl2026_admin_key', String(key || '').trim());
+}
+
+async function initLeagueSite() {
+  loadState();
+  rebuildAll();
+  await fetchLeagueDataFromSheets(true);
+}
 
 // ── LOCAL DATA + BACKUPS ──
 function persistState() {
@@ -439,17 +595,27 @@ function buildResultManager() {
   sel.innerHTML = '<option value="">Select saved result</option>' + RESULTS.map((r,i)=>`<option value="${i}">Week ${r.week} · ${r.team1} vs ${r.team2} · ${r.matchResult}</option>`).join('');
 }
 
-function removeResultAt(index) {
+async function removeResultAt(index) {
   const i = parseInt(index, 10);
   if(isNaN(i) || !RESULTS[i]) { alert('Please select a saved result first.'); return; }
   const r = RESULTS[i];
   if(!confirm(`Remove Week ${r.week}: ${r.team1} vs ${r.team2}?`)) return;
-  RESULTS.splice(i, 1);
-  recalcRecordsFromResults();
-  persistState();
-  rebuildAll();
-  buildResultManager();
-  alert('Result removed.');
+
+  try {
+    if(USE_GOOGLE_SHEETS_SYNC && r.resultId) {
+      await postLeagueAction('deleteResult', { resultId: r.resultId });
+      await fetchLeagueDataFromSheets(true);
+    } else {
+      RESULTS.splice(i, 1);
+      recalcRecordsFromResults();
+      persistState();
+      rebuildAll();
+      buildResultManager();
+    }
+    alert('Result removed.');
+  } catch (err) {
+    alert('Could not remove from Google Sheets: ' + err.message);
+  }
 }
 
 function deleteSelectedResult() {
@@ -458,16 +624,28 @@ function deleteSelectedResult() {
   removeResultAt(sel.value);
 }
 
-function loadSelectedResultForEdit() {
+async function loadSelectedResultForEdit() {
   const sel = document.getElementById('edit-result-select');
   if(!sel || sel.value === '') { alert('Please select a saved result first.'); return; }
   const i = parseInt(sel.value, 10);
   const r = RESULTS[i];
   if(!r) return;
   if(!confirm('This will load the selected result into the scorecard and remove the saved copy. Re-save after making edits. Continue?')) return;
-  RESULTS.splice(i, 1);
-  recalcRecordsFromResults();
-  persistState();
+
+  try {
+    if(USE_GOOGLE_SHEETS_SYNC && r.resultId) {
+      await postLeagueAction('deleteResult', { resultId: r.resultId });
+      await fetchLeagueDataFromSheets(true);
+    } else {
+      RESULTS.splice(i, 1);
+      recalcRecordsFromResults();
+      persistState();
+    }
+  } catch (err) {
+    alert('Could not remove the existing result from Google Sheets: ' + err.message);
+    return;
+  }
+
   document.getElementById('sc-week').value = r.week;
   document.getElementById('sc-side').value = sideValueFromLabel(r.side);
   document.getElementById('sc-team1').value = r.team1;
@@ -726,7 +904,7 @@ function onScoreInput(el) {
 }
 
 // ── SAVE MATCH ──
-function saveMatch() {
+async function saveMatch() {
   const week = parseInt(document.getElementById('sc-week').value);
   const side = document.getElementById('sc-side').value;
   const sideLabel = side === 'front' ? 'Front 9' : 'Back 9';
@@ -765,7 +943,7 @@ function saveMatch() {
     players[2].name + ' & ' + players[3].name
   ].join(' ');
 
-  RESULTS.push({
+  const resultToSave = {
     week, side: sideLabel, team1, team2,
     winner: winnerName,
     matchResult: state.matchResult,
@@ -776,11 +954,33 @@ function saveMatch() {
     playerLine,
     holesPlayed: state.holesWithScores,
     playersSnapshot: players.map(p => ({id:p.id, name:p.name, ghin:p.ghin, team:p.team})),
-    scoreSnapshot: {...scorecardScores}
-  });
+    scoreSnapshot: {...scorecardScores},
+    submittedBy: currentUser || ''
+  };
 
-  persistState();
-  rebuildAll();
+  try {
+    if(USE_GOOGLE_SHEETS_SYNC) {
+      const saved = await postLeagueAction('saveResult', {
+        result: {
+          ...resultToSave,
+          date: new Date().toISOString(),
+          playerScores: {
+            playersSnapshot: resultToSave.playersSnapshot,
+            scoreSnapshot: resultToSave.scoreSnapshot
+          }
+        }
+      });
+      if(saved && saved.result && saved.result.ResultID) resultToSave.resultId = saved.result.ResultID;
+      await fetchLeagueDataFromSheets(true);
+    } else {
+      RESULTS.push(resultToSave);
+      persistState();
+      rebuildAll();
+    }
+  } catch (err) {
+    alert('Could not save to Google Sheets: ' + err.message);
+    return;
+  }
 
   // Reset form
   scorecardScores = {};
@@ -809,6 +1009,8 @@ function doLogin() {
   const match = COMMISSIONERS.find(c => c.name.toLowerCase() === name.toLowerCase() && c.password === pass);
   if(match) {
     currentUser = match.name;
+    const apiKeyField = document.getElementById('admin-api-key');
+    if(apiKeyField && apiKeyField.value.trim()) saveAdminKey(apiKeyField.value.trim());
     document.getElementById('login-panel').style.display = 'none';
     document.getElementById('commissioner-panel').style.display = 'block';
     document.getElementById('comm-user').textContent = '👋 Welcome, ' + match.name;
@@ -845,6 +1047,8 @@ function showCommTab(id, btn) {
   btn.classList.add('active');
   document.getElementById('scorecard-tab').style.display = id==='scorecard-tab' ? 'block' : 'none';
   document.getElementById('manage-tab').style.display = id==='manage-tab' ? 'block' : 'none';
+  const noteTab = document.getElementById('note-tab');
+  if(noteTab) noteTab.style.display = id==='note-tab' ? 'block' : 'none';
 }
 
 function show(id, btn) {
@@ -1126,5 +1330,4 @@ function buildHoleBreakdown(players) {
   container.innerHTML = html;
 }
 
-loadState();
-rebuildAll();
+initLeagueSite();
