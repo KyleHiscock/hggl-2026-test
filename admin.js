@@ -46,14 +46,14 @@ const COMMISSIONERS = [
 ];
 
 const DEFAULT_TEAMS = [
-  {name:'Zambogeys',        players:'Ritzy & Robby D',   w:0, l:0},
-  {name:'Bombs Away',       players:'Gener & Tony',      w:0, l:0},
-  {name:'Putting Goons',    players:'Hick & Greg',       w:0, l:0},
-  {name:'Fairway Enforcers',players:'Kyle & Gracey',     w:0, l:0},
-  {name:'Pin Sharks',       players:'Drexy & Nick',      w:0, l:0},
-  {name:'Rough Riders',     players:'Ando & Kendrick',   w:0, l:0},
-  {name:'2 Cocks 1 Ball',   players:'CJ & Justyn',       w:0, l:0},
-  {name:'Foot Wedge Crew',  players:'Tank & Bob',        w:0, l:0},
+  {name:'Zambogeys',        players:'Ritzy & Robby D',   w:0, l:0, holesWon:0, holesLost:0},
+  {name:'Bombs Away',       players:'Gener & Tony',      w:0, l:0, holesWon:0, holesLost:0},
+  {name:'Putting Goons',    players:'Hick & Greg',       w:0, l:0, holesWon:0, holesLost:0},
+  {name:'Fairway Enforcers',players:'Kyle & Gracey',     w:0, l:0, holesWon:0, holesLost:0},
+  {name:'Pin Sharks',       players:'Drexy & Nick',      w:0, l:0, holesWon:0, holesLost:0},
+  {name:'Rough Riders',     players:'Ando & Kendrick',   w:0, l:0, holesWon:0, holesLost:0},
+  {name:'2 Cocks 1 Ball',   players:'CJ & Justyn',       w:0, l:0, holesWon:0, holesLost:0},
+  {name:'Foot Wedge Crew',  players:'Tank & Bob',        w:0, l:0, holesWon:0, holesLost:0},
 ];
 
 let TEAMS = DEFAULT_TEAMS.map(t => ({...t}));
@@ -131,6 +131,7 @@ function loadState() {
     const parsed = JSON.parse(raw);
     if(Array.isArray(parsed.teams)) {
       TEAMS = DEFAULT_TEAMS.map(def => ({...def, ...(parsed.teams.find(t => t.name === def.name) || {})}));
+      recalcRecordsFromResults();
     }
     if(Array.isArray(parsed.results)) RESULTS = parsed.results;
   } catch (err) {
@@ -175,6 +176,7 @@ function importLeagueData(event) {
       if(!Array.isArray(data.teams) || !Array.isArray(data.results)) throw new Error('Invalid backup format');
       TEAMS = DEFAULT_TEAMS.map(def => ({...def, ...(data.teams.find(t => t.name === def.name) || {})}));
       RESULTS = data.results;
+      recalcRecordsFromResults();
       persistState();
       rebuildAll();
       alert('Backup imported successfully.');
@@ -188,7 +190,7 @@ function importLeagueData(event) {
 
 function resetSeasonData() {
   if(!confirm('Reset all results and standings? Export a backup first if you need one.')) return;
-  TEAMS = DEFAULT_TEAMS.map(t => ({...t, w:0, l:0}));
+  TEAMS = DEFAULT_TEAMS.map(t => ({...t, w:0, l:0, holesWon:0, holesLost:0}));
   RESULTS = [];
   persistState();
   rebuildAll();
@@ -197,7 +199,7 @@ function resetSeasonData() {
 
 // ── TICKER ──
 function buildTicker() {
-  const sorted = [...TEAMS].sort((a,b)=>b.w-a.w||a.l-b.l);
+  const sorted = getSortedStandings();
   const doubled = [...sorted,...sorted];
   document.getElementById('ticker-track').innerHTML = doubled.map(t => {
     const logo = LOGOS[t.name] ? `<img src="${LOGOS[t.name]}" class="t-logo-sm" alt="${t.name}">` : '';
@@ -207,7 +209,7 @@ function buildTicker() {
 
 // ── STANDINGS ──
 function buildStandingsTable() {
-  const sorted = [...TEAMS].sort((a,b)=>b.w-a.w||a.l-b.l);
+  const sorted = getSortedStandings();
   const ranks = ['🥇','🥈','🥉'];
   const last = sorted[sorted.length-1];
   document.getElementById('standings-body').innerHTML = sorted.map((t,i) => {
@@ -219,13 +221,14 @@ function buildStandingsTable() {
         <div class="t-players">${t.players}</div>
       </div></div></td>
       <td class="w-cell">${t.w}</td>
+      <td class="hw-cell">${t.holesWon || 0}</td>
       <td class="l-cell">${t.l}</td>
     </tr>`;
   }).join('');
 }
 
 function buildCards() {
-  const sorted = [...TEAMS].sort((a,b)=>b.w-a.w||a.l-b.l);
+  const sorted = getSortedStandings();
   const last = sorted[sorted.length-1];
   document.getElementById('cards-grid').innerHTML = sorted.map((t,i) => {
     const isLast = t===last && (t.w>0||t.l>0);
@@ -238,6 +241,8 @@ function buildCards() {
         ${isLast?'<div class="card-bubble-tag">😬 Buy the Beers</div>':''}
         <div class="card-record">
           <div class="card-stat wins"><div class="card-stat-num">${t.w}</div><div class="card-stat-label">Wins</div></div>
+          <div class="card-divider"></div>
+          <div class="card-stat holes"><div class="card-stat-num">${t.holesWon || 0}</div><div class="card-stat-label">Holes Won</div></div>
           <div class="card-divider"></div>
           <div class="card-stat losses"><div class="card-stat-num">${t.l}</div><div class="card-stat-label">Losses</div></div>
         </div>
@@ -259,7 +264,7 @@ function buildDashboard() {
   const miniRows = sorted.slice(0,4).map((t,i)=>`<div class="mini-standings-row">
     <div class="mini-rank">${i+1}</div>
     <div class="mini-team">${logoImg(t.name,'mini-logo','m-placeholder')}<div class="mini-team-name">${t.name}</div></div>
-    <div class="mini-record">${t.w}-${t.l}</div>
+    <div class="mini-record">${t.w}-${t.l}<span class="mini-hw">${t.holesWon || 0} HW</span></div>
   </div>`).join('');
   const nextHtml = nextWeek ? nextWeek.matchups.map(m=>`<div class="matchup-card">
     <span class="m-time">${m.time}</span>
@@ -270,7 +275,7 @@ function buildDashboard() {
 
   container.innerHTML = `
     <div class="dashboard-grid">
-      <div class="dash-card"><div class="dash-label">Current Leader</div><div class="dash-value">${leader ? leader.name : 'TBD'}</div><div class="dash-sub">${leader ? `${leader.w}-${leader.l}` : 'No matches yet'}</div></div>
+      <div class="dash-card"><div class="dash-label">Current Leader</div><div class="dash-value">${leader ? leader.name : 'TBD'}</div><div class="dash-sub">${leader ? `${leader.w}-${leader.l} · ${leader.holesWon || 0} holes won` : 'No matches yet'}</div></div>
       <div class="dash-card gold"><div class="dash-label">Matches Recorded</div><div class="dash-value">${totalMatches}</div><div class="dash-sub">Saved scorecards / results</div></div>
       <div class="dash-card ice"><div class="dash-label">Latest Result</div><div class="dash-value">${lastResult ? lastResult.matchResult : 'TBD'}</div><div class="dash-sub">${lastResult ? `${lastResult.team1} vs ${lastResult.team2}` : 'Check back after Week 1'}</div></div>
     </div>
@@ -403,11 +408,19 @@ function buildRosterDatalist() {
 }
 
 function recalcRecordsFromResults() {
-  TEAMS = DEFAULT_TEAMS.map(t => ({...t, w:0, l:0}));
+  TEAMS = DEFAULT_TEAMS.map(t => ({...t, w:0, l:0, holesWon:0, holesLost:0}));
   RESULTS.forEach(r => {
     const t1 = TEAMS.find(t => t.name === r.team1);
     const t2 = TEAMS.find(t => t.name === r.team2);
     if(!t1 || !t2) return;
+
+    const t1Holes = Number(r.team1HolesWon || r.holesWon?.team1 || 0);
+    const t2Holes = Number(r.team2HolesWon || r.holesWon?.team2 || 0);
+    t1.holesWon += t1Holes;
+    t1.holesLost += t2Holes;
+    t2.holesWon += t2Holes;
+    t2.holesLost += t1Holes;
+
     if(r.winner === r.team1) { t1.w++; t2.l++; }
     else if(r.winner === r.team2) { t2.w++; t1.l++; }
     else { t1.w += 0.5; t2.w += 0.5; }
@@ -539,6 +552,36 @@ function calcMatchState(players, strokeSets, holes) {
   return {matchStatus, matchOver, matchResult, winner, holesWithScores};
 }
 
+
+function calcHoleWinTotals(players, strokeSets, holes) {
+  let team1HolesWon = 0;
+  let team2HolesWon = 0;
+  let tiedHoles = 0;
+
+  holes.forEach(h => {
+    const t1nets = [0,1].map(pi => {
+      const key = `${players[pi].id}_${h.hole}`;
+      const g = scorecardScores[key] ? parseInt(scorecardScores[key]) : null;
+      return g !== null ? g - (strokeSets[pi].has(h.hole) ? 1 : 0) : null;
+    }).filter(s => s !== null);
+
+    const t2nets = [2,3].map(pi => {
+      const key = `${players[pi].id}_${h.hole}`;
+      const g = scorecardScores[key] ? parseInt(scorecardScores[key]) : null;
+      return g !== null ? g - (strokeSets[pi].has(h.hole) ? 1 : 0) : null;
+    }).filter(s => s !== null);
+
+    if(!t1nets.length || !t2nets.length) return;
+    const t1best = Math.min(...t1nets);
+    const t2best = Math.min(...t2nets);
+    if(t1best < t2best) team1HolesWon++;
+    else if(t2best < t1best) team2HolesWon++;
+    else tiedHoles++;
+  });
+
+  return { team1HolesWon, team2HolesWon, tiedHoles };
+}
+
 function renderScorecard() {
   const holes = getHoles();
   const side = document.getElementById('sc-side').value;
@@ -668,6 +711,7 @@ function saveMatch() {
   const strokes = calcPlayerStrokes(players, side);
   const strokeSets = players.map((p,i) => getStrokeHoles(strokes[i], holes));
   const state = calcMatchState(players, strokeSets, holes);
+  const holeTotals = calcHoleWinTotals(players, strokeSets, holes);
 
   if(state.holesWithScores === 0) { alert('Please enter at least some scores before saving.'); return; }
   if(state.holesWithScores < holes.length && !confirm('This match is not fully scored yet. Save the current result anyway?')) return;
@@ -680,6 +724,10 @@ function saveMatch() {
   if(winnerName === team1) { t1.w++; t2.l++; }
   else if(winnerName === team2) { t2.w++; t1.l++; }
   else { t1.w += 0.5; t2.w += 0.5; } // Halved
+  t1.holesWon = (t1.holesWon || 0) + holeTotals.team1HolesWon;
+  t1.holesLost = (t1.holesLost || 0) + holeTotals.team2HolesWon;
+  t2.holesWon = (t2.holesWon || 0) + holeTotals.team2HolesWon;
+  t2.holesLost = (t2.holesLost || 0) + holeTotals.team1HolesWon;
 
   const playerLine = [
     players[0].name + ' & ' + players[1].name,
@@ -691,6 +739,10 @@ function saveMatch() {
     week, side: sideLabel, team1, team2,
     winner: winnerName,
     matchResult: state.matchResult,
+    team1HolesWon: holeTotals.team1HolesWon,
+    team2HolesWon: holeTotals.team2HolesWon,
+    tiedHoles: holeTotals.tiedHoles,
+    holesWon: { team1: holeTotals.team1HolesWon, team2: holeTotals.team2HolesWon },
     playerLine,
     holesPlayed: state.holesWithScores,
     playersSnapshot: players.map(p => ({id:p.id, name:p.name, ghin:p.ghin, team:p.team})),

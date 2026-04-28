@@ -1,4 +1,4 @@
-// V2.6 polish layer: cleaner dashboard language + playoff matchups + update notes
+// V2.7 polish layer: clearer typography + holes-won standings tiebreak
 const COMMISSIONER_NOTE = 'Week 1 starts Tuesday, May 5. Please arrive early, check in with your group, and make sure GHIN scores are posted after the round.';
 
 function formatLastUpdated() {
@@ -17,7 +17,7 @@ function buildDashboard() {
   const miniRows = sorted.slice(0,4).map((t,i)=>`<div class="mini-standings-row">
     <div class="mini-rank">${i+1}</div>
     <div class="mini-team">${logoImg(t.name,'mini-logo','m-placeholder')}<div class="mini-team-name">${t.name}</div></div>
-    <div class="mini-record">${t.w}-${t.l}</div>
+    <div class="mini-record">${t.w}-${t.l}<span class="mini-hw">${t.holesWon || 0} HW</span></div>
   </div>`).join('');
   const nextHtml = nextWeek ? nextWeek.matchups.map(m=>`<div class="matchup-card">
     <span class="m-time">${m.time}</span>
@@ -35,14 +35,14 @@ function buildDashboard() {
       </div>
     </div>
     <div class="dashboard-grid dashboard-grid-two">
-      <div class="dash-card"><div class="dash-label">Current #1 Seed</div><div class="dash-value">${leader ? leader.name : 'TBD'}</div><div class="dash-sub">${leader ? `${leader.w}-${leader.l} · ${formatLastUpdated()}` : 'No matches entered yet.'}</div></div>
+      <div class="dash-card"><div class="dash-label">Current #1 Seed</div><div class="dash-value">${leader ? leader.name : 'TBD'}</div><div class="dash-sub">${leader ? `${leader.w}-${leader.l} · ${leader.holesWon || 0} holes won · ${formatLastUpdated()}` : 'No matches entered yet.'}</div></div>
       <div class="dash-card ice"><div class="dash-label">Latest Result</div><div class="dash-value">${lastResult ? lastResult.matchResult : 'TBD'}</div><div class="dash-sub">${lastResult ? `${lastResult.team1} vs ${lastResult.team2}` : 'Results will appear after Week 1.'}</div></div>
     </div>
     <div class="dashboard-two">
       <div class="dashboard-panel"><div class="panel-title">Next Matchups · Week ${nextWeek ? nextWeek.week : 'TBD'}</div>${nextHtml}</div>
       <div class="dashboard-panel"><div class="panel-title">Standings Snapshot</div>${miniRows || '<div class="dash-empty">Standings will populate after scores are entered.</div>'}</div>
     </div>
-    <div class="dashboard-panel playoff-dashboard"><div class="panel-title">If Playoffs Started Today</div><div class="dash-empty" style="margin-bottom:10px">Opening-round bracket based on current standings. All 8 teams make it, then teams reseed after each round.</div><div id="playoff-picture-container"></div></div>`;
+    <div class="dashboard-panel playoff-dashboard"><div class="panel-title">If Playoffs Started Today</div><div class="dash-empty" style="margin-bottom:10px">Opening-round bracket based on current standings. Standings ties are sorted by total holes won. All 8 teams make it, then teams reseed after each round.</div><div id="playoff-picture-container"></div></div>`;
   buildPlayoffPicture();
 }
 
@@ -77,7 +77,7 @@ function buildResults() {
               ${logoImg(r.team2,'result-logo','result-placeholder')}
             </div>
           </div>
-          <div class="result-detail">${r.playerLine}</div>
+          <div class="result-detail">${r.playerLine}${(r.team1HolesWon !== undefined || r.team2HolesWon !== undefined) ? ` · Holes won: ${r.team1} ${r.team1HolesWon || 0}, ${r.team2} ${r.team2HolesWon || 0}` : ''}</div>
         </div>`;
       }).join('')}
     </div>`).join('');
