@@ -7,6 +7,7 @@
 <meta name="robots" content="noindex,nofollow">
 <link href="https://fonts.googleapis.com/css2?family=Bebas+Neue&family=Barlow+Condensed:wght@400;600;700;900&family=Barlow:wght@400;500;600&display=swap" rel="stylesheet">
 <link rel="stylesheet" href="style.css">
+<link rel="stylesheet" href="theme-polished.css">
 
 </head>
 <body>
@@ -39,11 +40,13 @@
 <div class="content">
   <div id="dashboard" class="section active">
     <div class="section-header"><span class="section-label">League Dashboard</span><div class="section-header-line"></div></div>
+    <p class="section-subtitle">Quick glance at tee times, standings, results, and playoff matchups.</p>
     <div id="dashboard-container"></div>
   </div>
 
   <div id="standings" class="section">
     <div class="section-header"><span class="section-label">2026 Standings</span><div class="section-header-line"></div></div>
+    <p class="section-subtitle" id="standings-updated">Standings will update automatically after results are entered.</p>
     <div class="view-toggle">
       <button class="view-btn active" onclick="setView('table',this)">&#9776; Table</button>
       <button class="view-btn" onclick="setView('cards',this)">&#9638; Cards</button>
@@ -59,11 +62,13 @@
 
   <div id="schedule" class="section">
     <div class="section-header"><span class="section-label">Schedule</span><div class="section-header-line"></div></div>
+    <p class="section-subtitle">Weekly matchups, tee times, and front/back nine assignments.</p>
     <div id="schedule-container"></div>
   </div>
 
   <div id="results" class="section">
     <div class="section-header"><span class="section-label">Results</span><div class="section-header-line"></div></div>
+    <p class="section-subtitle" id="results-updated">Final match results will show here once scores are saved.</p>
     <div id="results-container">
       <div class="no-results"><div class="no-results-icon">🏌️</div><div class="no-results-text">No results yet<br>Check back after Week 1</div></div>
     </div>
@@ -71,6 +76,7 @@
 
   <div id="stats" class="section">
     <div class="section-header"><span class="section-label">Player Stats</span><div class="section-header-line"></div></div>
+    <p class="section-subtitle">Individual scoring trends and season leaders will populate after scorecards are saved.</p>
 
     <!-- Stats Filter -->
     <div class="stats-filter">
@@ -113,6 +119,7 @@
 
   <div id="rules" class="section">
     <div class="section-header"><span class="section-label">League Rules</span><div class="section-header-line"></div></div>
+    <p class="section-subtitle">League format, GHIN requirements, playoff setup, and tiebreaker order.</p>
     <div class="rules-grid">
       <div class="rule-card"><div class="rule-title">Format</div><p>Weekly 2-man best ball match play. Each matchup is played over 9 holes.</p></div>
       <div class="rule-card"><div class="rule-title">GHIN Handicaps</div><p>GHIN handicaps are mandatory. GHINs will be used for league handicapping throughout the season, so all players are expected to keep their GHIN updated and post scores after each round.</p></div>
@@ -128,6 +135,7 @@
 </div>
 
 <script src="public.js"></script>
+<script src="polish.js"></script>
 
 </body>
 </html>
