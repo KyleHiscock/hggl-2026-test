@@ -248,9 +248,8 @@ function buildCards() {
 function buildDashboard() {
   const container = document.getElementById('dashboard-container');
   if(!container) return;
-  const sorted = [...TEAMS].sort((a,b)=>b.w-a.w||a.l-b.l||a.name.localeCompare(b.name));
+  const sorted = getSortedStandings();
   const leader = sorted[0];
-  const totalMatches = RESULTS.length;
   const nextWeek = SCHEDULE_WEEKS.find(w => !RESULTS.some(r => parseInt(r.week) === w.week)) || SCHEDULE_WEEKS[SCHEDULE_WEEKS.length-1];
   const lastResult = RESULTS[RESULTS.length-1];
   const miniRows = sorted.slice(0,4).map((t,i)=>`<div class="mini-standings-row">
@@ -266,33 +265,44 @@ function buildDashboard() {
   </div>`).join('') : '<div class="dash-empty">Schedule coming soon.</div>';
 
   container.innerHTML = `
-    <div class="dashboard-grid">
-      <div class="dash-card"><div class="dash-label">Current Leader</div><div class="dash-value">${leader ? leader.name : 'TBD'}</div><div class="dash-sub">${leader ? `${leader.w}-${leader.l}` : 'No matches yet'}</div></div>
-      <div class="dash-card gold"><div class="dash-label">Matches Recorded</div><div class="dash-value">${totalMatches}</div><div class="dash-sub">Saved scorecards / results</div></div>
+    <div class="dashboard-grid dashboard-grid-two">
+      <div class="dash-card"><div class="dash-label">Current #1 Seed</div><div class="dash-value">${leader ? leader.name : 'TBD'}</div><div class="dash-sub">${leader ? `${leader.w}-${leader.l}` : 'No matches yet'}</div></div>
       <div class="dash-card ice"><div class="dash-label">Latest Result</div><div class="dash-value">${lastResult ? lastResult.matchResult : 'TBD'}</div><div class="dash-sub">${lastResult ? `${lastResult.team1} vs ${lastResult.team2}` : 'Check back after Week 1'}</div></div>
     </div>
     <div class="dashboard-two">
       <div class="dashboard-panel"><div class="panel-title">Next Up · Week ${nextWeek ? nextWeek.week : 'TBD'}</div>${nextHtml}</div>
       <div class="dashboard-panel"><div class="panel-title">Top Standings</div>${miniRows || '<div class="dash-empty">No standings yet.</div>'}</div>
     </div>
-    <div class="dashboard-panel playoff-dashboard"><div class="panel-title">Playoff Picture</div><div id="playoff-picture-container"></div></div>`;
+    <div class="dashboard-panel playoff-dashboard"><div class="panel-title">If Playoffs Started Today</div><div class="dash-empty" style="margin-bottom:10px">Opening-round matchups based on current standings. Teams reseed after each round.</div><div id="playoff-picture-container"></div></div>`;
   buildPlayoffPicture();
 }
 
-// ── PLAYOFF PICTURE ──
+function getSortedStandings() {
+  return [...TEAMS].sort((a,b)=>b.w-a.w||a.l-b.l||a.name.localeCompare(b.name));
+}
+
+// ── PLAYOFF MATCHUPS ──
 function buildPlayoffPicture() {
   const container = document.getElementById('playoff-picture-container');
   if(!container) return;
-  const sorted = [...TEAMS].sort((a,b)=>b.w-a.w||a.l-b.l||a.name.localeCompare(b.name));
-  const playoffCut = 4;
-  container.innerHTML = sorted.map((t,i)=>{
-    const status = i < playoffCut ? 'In Playoff Position' : (i === playoffCut ? 'First Team Out' : 'Chasing');
-    const cls = i < playoffCut ? 'playoff-in' : (i === playoffCut ? 'playoff-bubble' : 'playoff-out');
-    return `<div class="playoff-row ${cls}">
-      <div class="playoff-seed">${i+1}</div>
-      <div class="playoff-team">${logoImg(t.name,'mini-logo','m-placeholder')}<span>${t.name}</span></div>
-      <div class="playoff-record">${t.w}-${t.l}</div>
-      <div class="playoff-status">${status}</div>
+  const sorted = getSortedStandings();
+  const pairings = [[0,7],[1,6],[2,5],[3,4]];
+  container.innerHTML = pairings.map(([hi, lo])=>{
+    const highSeed = sorted[hi];
+    const lowSeed = sorted[lo];
+    if(!highSeed || !lowSeed) return '';
+    return `<div class="playoff-matchup-row">
+      <div class="playoff-team playoff-team-high">
+        <div class="playoff-seed">${hi+1}</div>
+        ${logoImg(highSeed.name,'mini-logo','m-placeholder')}
+        <div><span>${highSeed.name}</span><div class="playoff-record">${highSeed.w}-${highSeed.l}</div></div>
+      </div>
+      <div class="playoff-vs">VS</div>
+      <div class="playoff-team playoff-team-low">
+        <div class="playoff-seed">${lo+1}</div>
+        ${logoImg(lowSeed.name,'mini-logo','m-placeholder')}
+        <div><span>${lowSeed.name}</span><div class="playoff-record">${lowSeed.w}-${lowSeed.l}</div></div>
+      </div>
     </div>`;
   }).join('');
 }
