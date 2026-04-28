@@ -195,19 +195,21 @@ function buildScheduleFromSheet(data) {
 
 function normalizeResultFromSheet(row) {
   let parsedScores = null;
-  try { parsedScores = row.PlayerScoresJSON ? JSON.parse(row.PlayerScoresJSON) : null; } catch(e) { parsedScores = null; }
+  const rawScores = row.PlayerScoresJSON || row['Score Snapshot JSON'] || row.ScoreSnapshotJSON || row.scoreSnapshotJson || '';
+  try { parsedScores = rawScores ? JSON.parse(rawScores) : null; } catch(e) { parsedScores = null; }
   const playerScores = parsedScores && typeof parsedScores === 'object' ? parsedScores : {};
   return {
     resultId: row.ResultID || row.resultId || '',
+    matchId: row.MatchID || row.matchId || '',
     week: Number(row.Week || row.week || 0),
     date: row.Date || row.date || '',
     side: row.Side || row.side || '',
     team1: normalizeTeamName(row.Team1 || row['Team 1'] || row.team1 || ''),
     team2: normalizeTeamName(row.Team2 || row['Team 2'] || row.team2 || ''),
     winner: normalizeTeamName(row.Winner || row.winner || ''),
-    matchResult: row.MatchResult || row.matchResult || '',
-    team1HolesWon: Number(row.Team1HolesWon || row.team1HolesWon || 0),
-    team2HolesWon: Number(row.Team2HolesWon || row.team2HolesWon || 0),
+    matchResult: row.MatchResult || row['Result Text'] || row.matchResult || '',
+    team1HolesWon: Number(row.Team1HolesWon || row['Team 1 Holes Won'] || row.team1HolesWon || 0),
+    team2HolesWon: Number(row.Team2HolesWon || row['Team 2 Holes Won'] || row.team2HolesWon || 0),
     playerLine: row.PlayerLine || row.playerLine || '',
     holesPlayed: Number(row.HolesPlayed || row.holesPlayed || 0),
     playersSnapshot: playerScores.playersSnapshot || row.playersSnapshot || [],
@@ -724,9 +726,9 @@ function calcMatchState(players, strokeSets, holes) {
   let matchOver = false;
   let matchOverResult = '';
   let holesWithScores = 0;
+  let lockedWinnerStatus = 0;
 
   for(let hi = 0; hi < holes.length; hi++) {
-    if(matchOver) break;
     const h = holes[hi];
     const t1nets = [0,1].map(pi => {
       const key = `${players[pi].id}_${h.hole}`;
@@ -739,10 +741,15 @@ function calcMatchState(players, strokeSets, holes) {
       return g !== null ? g - (strokeSets[pi].has(h.hole) ? 1 : 0) : null;
     }).filter(s => s !== null);
 
-    // Only score the hole if at least one player from each team has a score
+    // Only score the hole if at least one player from each team has a score.
     if(!t1nets.length || !t2nets.length) continue;
 
     holesWithScores++;
+
+    // Once a match is mathematically closed, keep counting scored holes for completeness,
+    // but do not let extra/practice holes change the official match result.
+    if(matchOver) continue;
+
     const t1best = Math.min(...t1nets);
     const t2best = Math.min(...t2nets);
     if(t1best < t2best) matchStatus++;
@@ -751,6 +758,7 @@ function calcMatchState(players, strokeSets, holes) {
     const holesLeft = holes.length - (hi + 1);
     if(Math.abs(matchStatus) > holesLeft) {
       matchOver = true;
+      lockedWinnerStatus = matchStatus;
       matchOverResult = `${Math.abs(matchStatus)}&${holesLeft}`;
     }
   }
@@ -758,7 +766,7 @@ function calcMatchState(players, strokeSets, holes) {
   let matchResult = '', winner = null;
   if(matchOver) {
     matchResult = matchOverResult;
-    winner = matchStatus > 0 ? 0 : 1;
+    winner = lockedWinnerStatus > 0 ? 0 : 1;
   } else if(holesWithScores === holes.length) {
     // All 9 holes scored
     if(matchStatus === 0) { matchResult = 'ALL SQUARE'; winner = null; }

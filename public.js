@@ -191,19 +191,21 @@ function buildScheduleFromSheet(data) {
 
 function normalizeResultFromSheet(row) {
   let parsedScores = null;
-  try { parsedScores = row.PlayerScoresJSON ? JSON.parse(row.PlayerScoresJSON) : null; } catch(e) { parsedScores = null; }
+  const rawScores = row.PlayerScoresJSON || row['Score Snapshot JSON'] || row.ScoreSnapshotJSON || row.scoreSnapshotJson || '';
+  try { parsedScores = rawScores ? JSON.parse(rawScores) : null; } catch(e) { parsedScores = null; }
   const playerScores = parsedScores && typeof parsedScores === 'object' ? parsedScores : {};
   return {
     resultId: row.ResultID || row.resultId || '',
+    matchId: row.MatchID || row.matchId || '',
     week: Number(row.Week || row.week || 0),
     date: row.Date || row.date || '',
     side: row.Side || row.side || '',
     team1: normalizeTeamName(row.Team1 || row['Team 1'] || row.team1 || ''),
     team2: normalizeTeamName(row.Team2 || row['Team 2'] || row.team2 || ''),
     winner: normalizeTeamName(row.Winner || row.winner || ''),
-    matchResult: row.MatchResult || row.matchResult || '',
-    team1HolesWon: Number(row.Team1HolesWon || row.team1HolesWon || 0),
-    team2HolesWon: Number(row.Team2HolesWon || row.team2HolesWon || 0),
+    matchResult: row.MatchResult || row['Result Text'] || row.matchResult || '',
+    team1HolesWon: Number(row.Team1HolesWon || row['Team 1 Holes Won'] || row.team1HolesWon || 0),
+    team2HolesWon: Number(row.Team2HolesWon || row['Team 2 Holes Won'] || row.team2HolesWon || 0),
     playerLine: row.PlayerLine || row.playerLine || '',
     holesPlayed: Number(row.HolesPlayed || row.holesPlayed || 0),
     playersSnapshot: playerScores.playersSnapshot || row.playersSnapshot || [],
