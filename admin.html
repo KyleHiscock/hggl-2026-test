@@ -148,6 +148,7 @@
       <div class="comm-tabs">
         <button class="comm-tab active" onclick="showCommTab('scorecard-tab',this)">📋 Scorecard</button>
         <button class="comm-tab" onclick="showCommTab('manage-tab',this)">🗑 Manage</button>
+        <button class="comm-tab" onclick="showCommTab('note-tab',this)">📣 Note</button>
       </div>
 
       <div id="scorecard-tab">
@@ -220,6 +221,23 @@
           <div class="match-winner-display" id="winner-display"></div>
           <button class="submit-btn" onclick="saveMatch()">✅ Save Match Result</button>
           <div class="success-msg" id="sc-success">✅ Match saved! Standings updated.</div>
+        </div>
+      </div>
+
+
+      <div id="note-tab" style="display:none">
+        <div class="entry-card">
+          <div class="entry-title">📣 Commissioner Note</div>
+          <p style="font-family:'Barlow Condensed',sans-serif;font-size:13px;color:var(--muted);margin-bottom:14px;">
+            Update the note that appears at the top of the public home page. This version saves the note in the browser's local storage.
+          </p>
+          <label class="field-label">Homepage Note</label>
+          <textarea class="field-input" id="commissioner-note-field" rows="5" placeholder="Enter league update..." style="min-height:120px;resize:vertical;line-height:1.45;"></textarea>
+          <div class="two-col manage-actions">
+            <button class="submit-btn" onclick="saveCommissionerNote()">✅ Save Note</button>
+            <button class="submit-btn danger-btn" onclick="clearCommissionerNote()">Reset Note</button>
+          </div>
+          <div class="success-msg" id="commissioner-note-success" style="display:none"></div>
         </div>
       </div>
 

@@ -1,5 +1,63 @@
-// V2.7 polish layer: clearer typography + holes-won standings tiebreak
-const COMMISSIONER_NOTE = 'Week 1 starts Tuesday, May 5. Please arrive early, check in with your group, and make sure GHIN scores are posted after the round.';
+// V2.9 polish layer: clearer typography + holes-won standings tiebreak + editable commissioner note
+const COMMISSIONER_NOTE_KEY = 'hggl2026_commissioner_note';
+const DEFAULT_COMMISSIONER_NOTE = 'Week 1 starts Tuesday, May 5. Please arrive early, check in with your group, and make sure GHIN scores are posted after the round.';
+
+function escapeLeagueHtml(value) {
+  return String(value || '').replace(/[&<>"']/g, ch => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[ch]));
+}
+
+function getCommissionerNote() {
+  try {
+    const saved = localStorage.getItem(COMMISSIONER_NOTE_KEY);
+    return saved && saved.trim() ? saved : DEFAULT_COMMISSIONER_NOTE;
+  } catch (err) {
+    return DEFAULT_COMMISSIONER_NOTE;
+  }
+}
+
+function saveCommissionerNote() {
+  const field = document.getElementById('commissioner-note-field');
+  const msg = document.getElementById('commissioner-note-success');
+  if (!field) return;
+  try {
+    localStorage.setItem(COMMISSIONER_NOTE_KEY, field.value.trim());
+    if (msg) {
+      msg.textContent = '✅ Commissioner note saved.';
+      msg.style.display = 'block';
+    }
+    rebuildAll();
+  } catch (err) {
+    if (msg) {
+      msg.textContent = '⚠️ Note could not be saved in this browser.';
+      msg.style.display = 'block';
+    }
+  }
+}
+
+function clearCommissionerNote() {
+  const field = document.getElementById('commissioner-note-field');
+  const msg = document.getElementById('commissioner-note-success');
+  try {
+    localStorage.removeItem(COMMISSIONER_NOTE_KEY);
+    if (field) field.value = DEFAULT_COMMISSIONER_NOTE;
+    if (msg) {
+      msg.textContent = '✅ Commissioner note reset to the default.';
+      msg.style.display = 'block';
+    }
+    rebuildAll();
+  } catch (err) {
+    if (msg) {
+      msg.textContent = '⚠️ Note could not be reset in this browser.';
+      msg.style.display = 'block';
+    }
+  }
+}
+
+function initCommissionerNoteEditor() {
+  const field = document.getElementById('commissioner-note-field');
+  if (field) field.value = getCommissionerNote();
+}
+
 
 function formatLastUpdated() {
   if (!RESULTS || !RESULTS.length) return 'Standings update after Week 1 results are entered.';
@@ -31,7 +89,7 @@ function buildDashboard() {
       <div class="update-icon">📣</div>
       <div>
         <div class="update-title">Commissioner Note</div>
-        <div class="update-copy">${COMMISSIONER_NOTE}</div>
+        <div class="update-copy">${escapeLeagueHtml(getCommissionerNote()).replace(/\n/g, '<br>')}</div>
       </div>
     </div>
     <div class="dashboard-grid dashboard-grid-two">
@@ -111,3 +169,4 @@ function polishSectionCopy() {
 
 polishSectionCopy();
 rebuildAll();
+initCommissionerNoteEditor();

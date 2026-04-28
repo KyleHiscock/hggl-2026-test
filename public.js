@@ -115,7 +115,7 @@ function logoImg(name, cls, phCls) {
 // ── LOCAL DATA + BACKUPS ──
 function persistState() {
   try {
-    localStorage.setItem(STORAGE_KEY, JSON.stringify({ teams: TEAMS, results: RESULTS, savedAt: new Date().toISOString() }));
+    localStorage.setItem(STORAGE_KEY, JSON.stringify({ teams: TEAMS, results: RESULTS, commissionerNote: localStorage.getItem('hggl2026_commissioner_note') || '', savedAt: new Date().toISOString() }));
   } catch (err) {
     console.warn('League data could not be saved locally.', err);
   }
@@ -131,6 +131,7 @@ function loadState() {
       recalcRecordsFromResults();
     }
     if(Array.isArray(parsed.results)) RESULTS = parsed.results;
+    if(typeof parsed.commissionerNote === 'string' && parsed.commissionerNote.trim()) localStorage.setItem('hggl2026_commissioner_note', parsed.commissionerNote);
   } catch (err) {
     console.warn('League data could not be loaded.', err);
   }
