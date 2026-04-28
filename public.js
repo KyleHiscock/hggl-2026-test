@@ -1100,20 +1100,34 @@ function computePlayerStats() {
   const players = {};
 
   RESULTS.forEach(result => {
-    if(!result.scoreSnapshot) return;
     const side = result.side === 'Front 9' ? 'front' : 'back';
     const holes = side === 'front' ? COURSE.front : COURSE.back;
 
-    const parts = result.playerLine.split(' vs ');
-    const team1players = parts[0].split(' & ').map(n=>n.trim());
-    const team2players = parts[1] ? parts[1].split(' & ').map(n=>n.trim()) : ['',''];
+    // Use playersSnapshot for real player IDs and names if available,
+    // otherwise fall back to parsing playerLine with hardcoded IDs
+    let allPlayers = [];
+    const snap = result.playersSnapshot || [];
+    if (snap.length >= 4) {
+      allPlayers = [
+        {name:snap[0].name||'', id:snap[0].id||'p1a', team:result.team1, won:result.winner===result.team1, lost:result.winner===result.team2},
+        {name:snap[1].name||'', id:snap[1].id||'p1b', team:result.team1, won:result.winner===result.team1, lost:result.winner===result.team2},
+        {name:snap[2].name||'', id:snap[2].id||'p2a', team:result.team2, won:result.winner===result.team2, lost:result.winner===result.team1},
+        {name:snap[3].name||'', id:snap[3].id||'p2b', team:result.team2, won:result.winner===result.team2, lost:result.winner===result.team1},
+      ];
+    } else {
+      const parts = (result.playerLine || '').split(' vs ');
+      const team1players = parts[0].split(' & ').map(n=>n.trim());
+      const team2players = parts[1] ? parts[1].split(' & ').map(n=>n.trim()) : ['',''];
+      allPlayers = [
+        {name:team1players[0]||'', id:'p1a', team:result.team1, won:result.winner===result.team1, lost:result.winner===result.team2},
+        {name:team1players[1]||'', id:'p1b', team:result.team1, won:result.winner===result.team1, lost:result.winner===result.team2},
+        {name:team2players[0]||'', id:'p2a', team:result.team2, won:result.winner===result.team2, lost:result.winner===result.team1},
+        {name:team2players[1]||'', id:'p2b', team:result.team2, won:result.winner===result.team2, lost:result.winner===result.team1},
+      ];
+    }
 
-    const allPlayers = [
-      {name:team1players[0], id:'p1a', team:result.team1, won:result.winner===result.team1, lost:result.winner===result.team2},
-      {name:team1players[1]||'', id:'p1b', team:result.team1, won:result.winner===result.team1, lost:result.winner===result.team2},
-      {name:team2players[0], id:'p2a', team:result.team2, won:result.winner===result.team2, lost:result.winner===result.team1},
-      {name:team2players[1]||'', id:'p2b', team:result.team2, won:result.winner===result.team2, lost:result.winner===result.team1},
-    ];
+    // Track which player names we have already counted W/L for in this result
+    const wlCounted = {};
 
     allPlayers.forEach(p => {
       if(!p.name || p.name.startsWith('Player')) return;
@@ -1128,16 +1142,25 @@ function computePlayerStats() {
         };
       }
       const ps = players[p.name];
-      if(p.won) ps.matchWins++;
-      else if(p.lost) ps.matchLosses++;
-      else ps.matchTies++;
+
+      // Only count W/L once per player per result (prevents double-counting)
+      if (!wlCounted[p.name]) {
+        if(p.won) ps.matchWins++;
+        else if(p.lost) ps.matchLosses++;
+        else ps.matchTies++;
+        wlCounted[p.name] = true;
+      }
       ps.team = p.team;
+
+      // Only pull scores if scoreSnapshot exists
+      if (!result.scoreSnapshot || Object.keys(result.scoreSnapshot).length === 0) return;
 
       let grossTotal=0, holeCount=0;
       holes.forEach(h => {
         const key = p.id + '_' + h.hole;
-        const gross = result.scoreSnapshot[key] ? parseInt(result.scoreSnapshot[key]) : null;
-        if(gross===null) return;
+        const raw = result.scoreSnapshot[key];
+        const gross = (raw !== undefined && raw !== null && raw !== '') ? parseInt(raw) : null;
+        if(gross===null || isNaN(gross)) return;
         holeCount++;
         grossTotal += gross;
         ps.totalGross += gross;
