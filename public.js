@@ -426,7 +426,25 @@ function buildDashboard() {
     <div class="m-team">${logoImg(m.away,'m-logo','m-placeholder')}<span class="m-name">${m.away}</span></div>
   </div>`).join('') : '<div class="dash-empty">Schedule coming soon.</div>';
 
+  const noteText = (localStorage.getItem("hggl2026_commissioner_note") || "Week 1 starts Tuesday, May 5th. Please arrive early, check in with your group, and make sure GHIN scores are posted after the round.").trim();
+  const safeNote = String(noteText)
+    .replace(/&/g, "&amp;")
+    .replace(/</g, "&lt;")
+    .replace(/>/g, "&gt;")
+    .replace(/\"/g, "&quot;")
+    .replace(/'/g, "&#039;")
+    .replace(/\n/g, "<br>");
+  const dataSourceText = `Data source: ${LEAGUE_DATA_SOURCE}${LEAGUE_DATA_LAST_LOADED ? " · Updated " + LEAGUE_DATA_LAST_LOADED : ""}`;
+
   container.innerHTML = `
+    <div class="dashboard-panel update-card">
+      <div class="update-icon">📣</div>
+      <div>
+        <div class="update-title">Commissioner Note</div>
+        <div class="update-copy">${safeNote}</div>
+        <div class="data-source-note">${dataSourceText}</div>
+      </div>
+    </div>
     <div class="dashboard-grid dashboard-grid-two">
       <div class="dash-card"><div class="dash-label">Current #1 Seed</div><div class="dash-value">${leader ? leader.name : 'TBD'}</div><div class="dash-sub">${leader ? `${leader.w}-${leader.l} · ${leader.holesWon || 0} holes won` : 'No matches yet'}</div></div>
       <div class="dash-card ice"><div class="dash-label">Latest Result</div><div class="dash-value">${lastResult ? lastResult.matchResult : 'TBD'}</div><div class="dash-sub">${lastResult ? `${lastResult.team1} vs ${lastResult.team2}` : 'Check back after Week 1'}</div></div>
@@ -435,7 +453,7 @@ function buildDashboard() {
       <div class="dashboard-panel"><div class="panel-title">Next Up · Week ${nextWeek ? nextWeek.week : 'TBD'}</div>${nextHtml}</div>
       <div class="dashboard-panel"><div class="panel-title">Top Standings</div>${miniRows || '<div class="dash-empty">No standings yet.</div>'}</div>
     </div>
-    <div class="dashboard-panel playoff-dashboard"><div class="panel-title">If Playoffs Started Today</div><div class="dash-empty" style="margin-bottom:10px">Opening-round matchups based on current standings. Teams reseed after each round.</div><div id="playoff-picture-container"></div></div>`;
+    <div class="dashboard-panel playoff-dashboard"><div class="panel-title">If Playoffs Started Today</div><div class="dash-empty" style="margin-bottom:10px">Opening-round matchups based on current standings. If teams have the same record, total holes won is the standings tiebreaker. Teams reseed after each round.</div><div id="playoff-picture-container"></div></div>`;
   buildPlayoffPicture();
 }
 

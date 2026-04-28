@@ -23,3 +23,7 @@ The current default AdminKey in the site is:
 hggl2026-hiscock-drexler
 
 If you change the AdminKey in the Settings tab of the Google Sheet, enter the new key in the optional Admin API key field when logging into the admin page.
+
+V3.2 note fix:
+- Public dashboard now renders the Commissioner Note directly from public.js after Google Sheets data loads.
+- Added visible Data source text under the Commissioner Note for troubleshooting.
