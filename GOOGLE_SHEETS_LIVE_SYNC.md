@@ -27,3 +27,6 @@ If you change the AdminKey in the Settings tab of the Google Sheet, enter the ne
 V3.2 note fix:
 - Public dashboard now renders the Commissioner Note directly from public.js after Google Sheets data loads.
 - Added visible Data source text under the Commissioner Note for troubleshooting.
+
+## V3.5 Admin Write Fix
+Admin writes now use JSONP instead of browser POST/fetch to avoid Apps Script CORS issues from GitHub Pages. Update Apps Script with `APPS_SCRIPT_V3_5_ADMIN_WRITE_PATCH.md`.

@@ -227,13 +227,59 @@ function applyLeagueDataFromSheet(data) {
   LEAGUE_DATA_LAST_LOADED = new Date().toLocaleString('en-US', { timeZone:'America/New_York' });
 }
 
+function leagueJsonpRequest(action, payload={}) {
+  return new Promise((resolve, reject) => {
+    if(!LEAGUE_API_URL) {
+      reject(new Error('Missing Google Sheets API URL.'));
+      return;
+    }
+
+    const callbackName = 'hgglJsonp_' + Date.now() + '_' + Math.random().toString(36).slice(2);
+    const script = document.createElement('script');
+    const timer = setTimeout(() => {
+      cleanup();
+      reject(new Error('Google Sheets request timed out.'));
+    }, 15000);
+
+    function cleanup() {
+      clearTimeout(timer);
+      try { delete window[callbackName]; } catch(e) { window[callbackName] = undefined; }
+      if(script && script.parentNode) script.parentNode.removeChild(script);
+    }
+
+    window[callbackName] = function(response) {
+      cleanup();
+      if(!response || response.ok === false) {
+        reject(new Error((response && response.error) || 'Google Sheets API returned an error.'));
+        return;
+      }
+      resolve(response);
+    };
+
+    const params = new URLSearchParams();
+    params.set('action', action);
+    params.set('callback', callbackName);
+    params.set('v', String(Date.now()));
+    if(payload && Object.keys(payload).length) {
+      params.set('payload', JSON.stringify(payload));
+    }
+
+    script.onerror = function() {
+      cleanup();
+      reject(new Error('Google Sheets script request failed.'));
+    };
+
+    script.src = LEAGUE_API_URL + '?' + params.toString();
+    document.head.appendChild(script);
+  });
+}
+
 async function fetchLeagueDataFromSheets(silent=false) {
   if(!USE_GOOGLE_SHEETS_SYNC || !LEAGUE_API_URL) return false;
   try {
-    const res = await fetch(LEAGUE_API_URL + '?action=getLeagueData&v=' + Date.now(), { cache:'no-store' });
-    const json = await res.json();
-    if(!json.ok) throw new Error(json.error || 'Google Sheets API returned an error.');
+    const json = await leagueJsonpRequest('getLeagueData');
     applyLeagueDataFromSheet(json.data || {});
+    LEAGUE_DATA_SOURCE = 'Google Sheets JSONP';
     rebuildAll();
     if(typeof initCommissionerNoteEditor === 'function') initCommissionerNoteEditor();
     return true;
@@ -247,13 +293,7 @@ async function fetchLeagueDataFromSheets(silent=false) {
 
 async function postLeagueAction(action, payload={}) {
   const adminKey = getAdminKey();
-  const body = { action, adminKey, ...payload };
-  const res = await fetch(LEAGUE_API_URL, {
-    method: 'POST',
-    headers: { 'Content-Type': 'text/plain;charset=utf-8' },
-    body: JSON.stringify(body),
-  });
-  const json = await res.json();
+  const json = await leagueJsonpRequest(action, { adminKey, ...payload });
   if(!json.ok) throw new Error(json.error || 'Google Sheets API returned an error.');
   return json;
 }
